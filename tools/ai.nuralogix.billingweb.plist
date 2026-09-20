@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  BillingWeb 局域网服务 —— macOS LaunchAgent 模板
+  用 tools/install-lan-service.sh 安装（会先停掉手动起的实例，避免抢端口）
+  label: ai.nuralogix.billingweb
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.nuralogix.billingweb</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>/Users/michael/BillingWeb/tools/serve-lan.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/michael/BillingWeb</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- 绑所有网卡，局域网可访问；改成 127.0.0.1 即收回本机专属 -->
+        <key>BW_HOST</key>
+        <string>0.0.0.0</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 进程退出即拉起（崩溃自愈 + 开机自启） -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- 重启限速，端口被占时不至于疯狂重启 -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/michael/Library/Logs/BillingWeb.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/michael/Library/Logs/BillingWeb.err.log</string>
+</dict>
+</plist>

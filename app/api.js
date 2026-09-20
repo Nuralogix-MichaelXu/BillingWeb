@@ -82,6 +82,14 @@ function _isFileProtocol() {
 /**
  * 页面是否由本机服务提供（node server.js 起的 127.0.0.1 / localhost）。
  * 此时 `/__proxy` 与页面同源，可用「同源单跳」把请求量降到 iOS 水平。
+ *
+ * ⚠️ 这里**刻意只认回环地址**，不要把局域网 IP（192.168.x.x / 10.x.x.x）加进来：
+ *   局域网页面在 `_isLocalPage() === false` 时会被当作「部署页」→
+ *   `_useRelativeRelay()` 返回 true → 用相对路径 `/__proxy`，
+ *   而它正好由同一台 `server.js` 提供，链路正确（局域网部署就是靠这一条）。
+ *   一旦把局域网 IP 认成本机，`_servedByRelay()`（比对 RelayConfig.base）仍为 false，
+ *   前端就会改用绝对地址 `http://127.0.0.1:4173/__proxy` ——
+ *   那个 127.0.0.1 在**访问者自己的机器**上指向它自己，中继全灭。
  */
 function _isLocalPage() {
   if (typeof location === "undefined") return false;

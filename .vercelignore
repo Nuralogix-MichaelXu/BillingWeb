@@ -22,8 +22,12 @@ server.js
 cloud-functions/
 edgeone.json
 
-# 设计稿与真机验证截图
-*.png
+# 设计稿与真机验证截图（全部位于仓库根目录）
+# ⚠️ 不能写成裸的 `*.png`：按 gitignore 语义它会匹配任意层级，
+# 连带把页面资源 app/icons/logo.png 一起排除 → 线上品牌标 404。
+# 所以这里锚定到根目录，并显式把页面资源捞回来（双保险，兼容两种解释）。
+/*.png
+!app/icons/logo.png
 
 # 仓库与系统元数据
 .git/
