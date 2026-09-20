@@ -18,6 +18,10 @@ tests/
 tools/
 server.js
 
+# EdgeOne Pages 专用（Vercel 侧不需要，避免 Cloud Function 源码被公网下载）
+cloud-functions/
+edgeone.json
+
 # 设计稿与真机验证截图
 *.png
 
