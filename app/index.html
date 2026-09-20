@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="y1GsC5Zl8FlhWEKCjLohDl">
+<head data-page-node-id="vQwbDieFXE1EUgO7ZdJK4W">
+<meta charset="UTF-8" data-page-node-id="3jxEUtyhFhx4rXib0vdDUT">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="Fap8b3AZdHorWgdRysCEyb">
+<title data-i18n="app_title">BillingWeb · NuraLogix 计费系统</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" data-page-node-id="oiTlHbFomNJjkN7vMJ27gj">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin data-page-node-id="6WeH1UaMfdxtTIWHFKWQV2">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" data-page-node-id="MH4WF10iEBA7XJYudxbIse">
+<style>
+/* ============ 设计令牌（与设计稿一一对应） ============ */
+:root{
+  --primary:#0064E0;
+  --primary-deep:#0457CB;
+  --canvas:#FFFFFF;
+  --surface-soft:#F1F4F7;
+  --ink-deep:#0A1317;
+  --ink:#1C1E21;
+  --charcoal:#444950;
+  --steel:#5D6C7B;
+  --stone:#8595A4;
+  --hairline:#CED0D4;
+  --hairline-soft:#DEE3E9;
+  --disabled:#BCC0C4;
+  --success:#31A24C;
+  --critical:#E41E3F;
+  --total-bg:#FAFBFC;
+  --green-text:#31A24C;
+  --red-text:#E41E3F;
+  --orange-text:#FF9500;
+  --radius-pill:100px;
+  --font-cn:"Noto Sans SC",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  --font-en:"Inter","Noto Sans SC",-apple-system,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--font-cn);background:var(--canvas);color:var(--ink);-webkit-font-smoothing:antialiased}
+button{font-family:inherit;border:none;background:none;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.45}
+.page{display:none;min-height:100vh;flex-direction:column;background:var(--canvas)}
+.page.active{display:flex}
+
+/* ============ 公共 ============ */
+.logo{display:flex;align-items:center;gap:8px;user-select:none}
+.logo svg{display:block}
+.logo .logo-text{font-family:var(--font-en);font-size:17px;font-weight:600;letter-spacing:.5px;color:var(--ink-deep)}
+
+/* ============ 登录页 ============ */
+#page-login .top-nav{height:64px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;flex:none}
+/* 语言切换（1-LoginView.swift:517 LanguageSwitchButton）：药丸 + 下拉菜单 */
+.lang-switch{position:relative}
+.lang-pill{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-pill);border:1px solid var(--hairline);background:var(--canvas);font-size:14px;color:var(--ink);cursor:pointer}
+.lang-pill:hover{border-color:var(--steel)}
+.lang-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:180px;padding:8px;display:none;flex-direction:column;background:var(--canvas);border:1px solid var(--hairline);border-radius:16px;box-shadow:0 8px 24px rgba(20,22,26,.12);z-index:20}
+.lang-menu.open{display:flex}
+.lang-item{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:10px 12px;border:none;border-radius:8px;background:none;font-size:14px;color:var(--ink);text-align:left;cursor:pointer}
+.lang-item:hover{background:var(--surface-soft)}
+.lang-item.active{color:var(--primary);font-weight:600}
+.flag{display:block;flex:none;border-radius:2px}
+.login-body{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{width:440px;padding:44px 40px;display:flex;flex-direction:column;gap:28px;background:var(--canvas);border:1px solid var(--hairline-soft);border-radius:24px;box-shadow:0 4px 16px rgba(20,22,26,.06)}
+.login-title{font-size:28px;font-weight:600;color:var(--ink-deep);text-align:center}
+.login-form{display:flex;flex-direction:column;gap:20px}
+.field{display:flex;flex-direction:column;gap:8px}
+.field-label{font-size:14px;color:var(--charcoal)}
+.text-input{height:44px;padding:0 14px;border-radius:8px;border:1px solid var(--hairline);background:var(--canvas);font-family:var(--font-en);font-size:14px;color:var(--ink);outline:none;width:100%}
+.text-input::placeholder{color:var(--stone);opacity:.5}
+.text-input:focus{border-color:var(--primary)}
+.input-with-icon{position:relative;display:flex;align-items:center}
+.input-with-icon .text-input{padding-right:44px}
+.input-with-icon .eye-btn{position:absolute;right:12px;display:flex;align-items:center;opacity:.7;cursor:pointer}
+.region-tabs{display:flex;justify-content:flex-end;gap:8px}
+.tab{padding:8px 20px;border-radius:var(--radius-pill);font-size:14px;color:var(--charcoal);border:1px solid var(--hairline);background:var(--canvas)}
+.tab.active{background:var(--ink-deep);color:#FFFFFF;border-color:var(--ink-deep);font-weight:500}
+.mode-row{display:flex;justify-content:flex-end}
+.multi-link{font-size:14px;font-weight:500;color:var(--primary);background:none;padding:0}
+.multi-link:hover{color:var(--primary-deep);text-decoration:underline}
+.multi-tip{font-size:14px;color:var(--charcoal)}
+.multi-textarea{width:100%;min-height:200px;padding:14px 16px;border-radius:8px;border:1px solid var(--hairline);font-family:var(--font-en);font-size:12px;line-height:1.7;color:var(--ink);outline:none;resize:vertical}
+.multi-textarea:focus{border-color:var(--primary)}
+.multi-textarea::placeholder{color:var(--stone);font-size:11px;line-height:1.8;opacity:.5}
+.btn-login{height:48px;border-radius:var(--radius-pill);background:var(--primary);color:#FFFFFF;font-size:16px;font-weight:500;letter-spacing:1px;box-shadow:0 6px 14px rgba(0,100,224,.28);transition:background .15s ease;display:flex;align-items:center;justify-content:center;gap:10px}
+.btn-login:hover:not(:disabled){background:var(--primary-deep)}
+.btn-login .spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#FFFFFF;animation:spin .8s linear infinite;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.login-note{font-size:12px;color:var(--stone);text-align:center}
+.login-footer{height:110px;flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.login-footer .logo .logo-text{font-size:15px}
+.version{font-family:var(--font-en);font-size:11px;color:var(--disabled)}
+
+/* ============ 应用内页 ============ */
+.app-nav{height:64px;padding:0 40px;display:flex;align-items:center;justify-content:space-between;flex:none;border-bottom:1px solid var(--hairline-soft)}
+.nav-right{display:flex;align-items:center;gap:16px}
+.update-time{font-family:var(--font-en);font-size:12px;color:var(--primary)}
+.btn-outline{padding:8px 18px;border-radius:var(--radius-pill);border:1px solid var(--hairline);color:var(--ink-deep);font-size:14px;font-weight:500;background:var(--canvas);transition:background .15s ease}
+.btn-outline:hover:not(:disabled){background:var(--surface-soft)}
+.btn-primary-pill{padding:10px 22px;border-radius:var(--radius-pill);background:var(--primary);color:#FFFFFF;font-size:14px;font-weight:500;transition:background .15s ease}
+.btn-primary-pill:hover:not(:disabled){background:var(--primary-deep)}
+.app-content{flex:1;padding:32px 40px;display:flex;flex-direction:column;gap:20px}
+.page-head{display:flex;align-items:center;justify-content:space-between}
+.page-title{font-size:28px;font-weight:600;color:var(--ink-deep)}
+.head-actions{display:flex;align-items:center;gap:12px}
+
+/* 周期选择 */
+.filter-row{display:flex;align-items:center;gap:12px;position:relative}
+.filter-label{font-size:14px;color:var(--charcoal)}
+.dropdown-pill{display:flex;align-items:center;gap:8px;padding:8px 18px;border-radius:var(--radius-pill);background:var(--surface-soft);font-size:14px;font-weight:500;color:var(--ink);cursor:pointer}
+.dropdown-pill:hover{background:#E7ECF2}
+.cycle-menu{position:absolute;top:44px;left:80px;z-index:20;background:#FFFFFF;border:1px solid var(--hairline-soft);border-radius:12px;box-shadow:0 8px 24px rgba(20,22,26,.14);padding:6px;min-width:150px;display:none}
+.menu-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-radius:8px;font-size:14px;color:var(--ink);cursor:pointer}
+.menu-item:hover{background:var(--surface-soft)}
+.menu-item.active{background:rgba(0,100,224,.08);color:var(--primary);font-weight:500}
+.menu-check{color:var(--primary);font-size:12px}
+.custom-range{display:none;align-items:center;gap:12px}
+.range-group{display:flex;align-items:center;gap:8px}
+.range-label{font-size:12px;color:var(--charcoal);display:flex;align-items:center;gap:4px}
+.range-input{height:36px;padding:0 10px;border-radius:8px;border:1px solid var(--hairline);font-family:var(--font-en);font-size:13px;color:var(--primary);background:rgba(0,100,224,.05);outline:none}
+.range-sep{font-size:16px;color:var(--steel)}
+.btn-mini{padding:6px 14px;border-radius:var(--radius-pill);border:1px solid var(--hairline);background:var(--canvas);font-size:13px;color:var(--charcoal)}
+.btn-mini:hover{background:var(--surface-soft)}
+.btn-mini.primary{background:var(--primary);border-color:var(--primary);color:#FFFFFF}
+.btn-mini.primary:hover{background:var(--primary-deep)}
+.btn-back-range{width:36px;height:36px;border-radius:var(--radius-pill);border:1px solid var(--hairline);display:flex;align-items:center;justify-content:center;background:var(--canvas)}
+.btn-back-range:hover{background:var(--surface-soft)}
+
+/* 刷新进度条 */
+.progress-wrap{display:none;align-items:center;gap:12px}
+.progress-track{flex:1;height:6px;border-radius:100px;background:var(--surface-soft);overflow:hidden}
+.progress-bar{height:100%;width:0%;border-radius:100px;background:var(--green-text);transition:width .15s linear}
+.progress-text{font-family:var(--font-en);font-size:12px;font-weight:500;color:var(--green-text);width:44px;text-align:right}
+
+/* ============ 表格 ============ */
+.table-card{background:var(--canvas);border:1px solid var(--hairline-soft);border-radius:16px;padding:8px 24px;display:flex;flex-direction:column}
+.table-head{height:44px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;background:var(--surface-soft);border-radius:8px;flex:none}
+.table-head .th{font-size:12px;font-weight:500;color:var(--charcoal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.table-row{height:56px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--surface-soft)}
+.table-row.clickable{cursor:pointer}
+.table-row.clickable:hover{background:#F7FAFD}
+.td{font-family:var(--font-en);font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td.cn{font-family:var(--font-cn)}
+.td.link{color:var(--primary);font-weight:500;cursor:pointer}
+.td.blue{color:var(--primary)}
+/* 研究状态：设计稿为 Noto Sans SC Medium 13px（比正文小一号） */
+.td.status{font-size:13px;font-weight:500}
+.table-foot{display:flex;align-items:center;justify-content:space-between;padding:16px 4px 8px}
+.table-foot .count{font-size:13px;color:var(--steel)}
+.empty-state{padding:48px 0;text-align:center;font-size:14px;color:var(--stone)}
+.w170{width:170px}.w70{width:70px}.w90{width:90px}.w130{width:130px}.w100{width:100px}
+.w110{width:110px}.w120{width:120px}.w150{width:150px}.w140{width:140px}
+
+/* ============ 详情页 ============ */
+.crumb{font-family:var(--font-en);font-size:13px;color:var(--steel)}
+.detail-content{flex:1;padding:28px 40px 32px;display:flex;flex-direction:column;gap:24px}
+.detail-head{display:flex;align-items:center;gap:16px}
+.back-btn{width:40px;height:40px;border-radius:9999px;border:1px solid var(--hairline);background:var(--canvas);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s ease}
+.back-btn:hover{background:var(--surface-soft)}
+.org-title{font-family:var(--font-en);font-size:26px;font-weight:600;color:var(--ink-deep)}
+.region-badge{padding:4px 12px;border-radius:var(--radius-pill);background:var(--surface-soft);font-size:12px;color:var(--charcoal)}
+.summary{display:flex;flex-direction:column;gap:16px}
+.metric-row{display:flex;gap:16px}
+.metric-card{flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:6px;height:88px;background:var(--canvas);border:1px solid var(--hairline-soft);border-radius:12px;overflow:hidden}
+.metric-label{font-size:12px;color:var(--steel)}
+.metric-value{display:flex;align-items:center;gap:6px;font-family:var(--font-en);font-size:22px;font-weight:600;color:var(--ink-deep)}
+.metric-value.cn{font-family:var(--font-cn)}
+/* 统计周期 / 周期内消费：仅换色，字号字重沿用 .metric-value（设计稿 22px / SemiBold）。
+   去掉 font-family 覆盖，让数字走 Inter、中文自然回退 Noto Sans SC。 */
+.metric-value.blue{color:var(--primary)}
+.icon-btn{display:inline-flex;align-items:center;cursor:pointer;opacity:.9;vertical-align:middle}
+.icon-btn:hover{opacity:1}
+
+/* 设置图标按钮 */
+.icon-btn-circle{width:40px;height:40px;border-radius:50%;border:1px solid var(--hairline);background:var(--canvas);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--charcoal);transition:background .15s ease;flex:none}
+.icon-btn-circle:hover{background:var(--surface-soft)}
+.icon-btn-circle svg{display:block}
+
+/* 设置下拉菜单 */
+.settings-menu{position:absolute;top:56px;right:40px;z-index:20;background:#FFFFFF;border:1px solid var(--hairline-soft);border-radius:12px;box-shadow:0 8px 24px rgba(20,22,26,.14);padding:6px;min-width:160px;display:none;flex-direction:column}
+.settings-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;font-size:14px;color:var(--ink);cursor:pointer;transition:background .15s ease}
+.settings-item:hover{background:var(--surface-soft)}
+.settings-item svg{color:var(--charcoal);flex:none}
+.section-title{font-size:18px;font-weight:600;color:var(--ink-deep);margin-top:4px}
+.study-price{display:inline-block;min-width:28px}
+.total-row{height:52px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;background:var(--total-bg);border-radius:0 0 15px 15px}
+.total-row .td{font-weight:600;color:var(--ink-deep)}
+.total-row .td.cn-label{font-family:var(--font-cn);font-size:13px;font-weight:500}
+.total-row .td.dash{color:var(--disabled);font-weight:400}
+.detail-hint{font-size:12px;color:var(--stone)}
+.refreshing{width:12px;height:12px;border-radius:50%;border:2px solid var(--hairline);border-top-color:var(--steel);animation:spin .8s linear infinite;display:none;margin-left:6px}
+.rw110{width:110px}.rw190{width:190px}.rw70{width:70px}.rw130{width:130px}
+.rw140{width:140px}.rw150{width:150px}
+
+/* ============ 弹窗 / Toast ============ */
+#modal-root{display:none;position:fixed;inset:0;background:rgba(10,19,23,.28);z-index:90;align-items:center;justify-content:center}
+#modal-root.show{display:flex}
+.modal-card{width:360px;background:#FFFFFF;border-radius:18px;padding:26px;display:flex;flex-direction:column;gap:14px;box-shadow:0 16px 40px rgba(20,22,26,.2)}
+.modal-title{font-size:17px;font-weight:600;color:var(--ink-deep);text-align:center}
+.modal-message{font-size:14px;color:var(--charcoal);text-align:center;line-height:1.6;word-break:break-word}
+.modal-hint{font-size:12px;color:var(--stone);text-align:center}
+.modal-actions{display:flex;gap:10px;margin-top:6px}
+.modal-btn{flex:1;height:42px;border-radius:var(--radius-pill);border:1px solid var(--hairline);font-size:14px;font-weight:500;color:var(--ink-deep);background:var(--canvas)}
+.modal-btn:hover{background:var(--surface-soft)}
+.modal-btn.primary{background:var(--primary);border-color:var(--primary);color:#FFFFFF}
+.modal-btn.primary:hover{background:var(--primary-deep)}
+
+/* 账号信息弹窗（设置菜单 → 账号信息） */
+.modal-card.wide{width:380px}
+.account-list{display:flex;flex-direction:column;gap:10px;max-height:338px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--hairline) transparent}
+.account-list::-webkit-scrollbar{width:4px}
+.account-list::-webkit-scrollbar-thumb{background:var(--hairline);border-radius:2px}
+.account-list::-webkit-scrollbar-track{background:transparent}
+.account-item{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--surface-soft);border-radius:12px}
+.account-row{display:flex;gap:12px;align-items:baseline}
+.account-row .k{flex:none;width:64px;font-size:13px;color:var(--stone)}
+.account-row .v{flex:1;font-size:14px;color:var(--ink);font-family:var(--font-en);word-break:break-all}
+/* 统计分析页（6-StatisticsView.swift）— 与设计稿 726085914125000 风格统一：中性面/胶囊/细边 */
+.stats-toolbar{display:flex;align-items:center;gap:16px}
+.stats-toolbar .page-title{flex:1}
+.stats-seg{display:inline-flex;gap:4px;padding:4px;background:var(--surface-soft);border-radius:var(--radius-pill)}
+.stats-seg button{border:none;background:transparent;font-family:var(--font-cn);font-size:14px;font-weight:500;color:var(--charcoal);padding:8px 18px;border-radius:var(--radius-pill);cursor:pointer}
+.stats-seg button.active{background:var(--primary);color:#FFFFFF}
+.stats-period-bar{height:40px;display:flex;align-items:center;justify-content:center;background:var(--surface-soft);border-radius:8px;font-size:13px;color:var(--charcoal)}
+.stats-card{background:#FFFFFF;border:1px solid var(--hairline-soft);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:16px}
+.stats-card-head{display:flex;align-items:center;gap:12px}
+.stats-total-bar{flex:1;height:36px;display:flex;align-items:center;justify-content:center;background:var(--surface-soft);border-radius:8px;font-size:14px;font-weight:500;color:var(--ink);font-family:var(--font-cn)}
+.stats-org-pill{display:inline-flex;align-items:center;padding:7px 14px;background:var(--surface-soft);border-radius:8px;font-size:14px;font-weight:600;color:var(--ink);font-family:var(--font-cn)}
+.stats-chart-btn{width:36px;height:28px;border:1.5px solid var(--hairline);border-radius:var(--radius-pill);background:var(--canvas);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:background .15s ease}
+.stats-chart-btn:hover{background:var(--surface-soft)}
+.stats-date{font-size:13px;color:var(--stone);font-family:var(--font-en)}
+.stats-divider{height:1px;background:var(--surface-soft)}
+.stats-blocks{display:flex;gap:16px}
+.stats-block{flex:1;display:flex;flex-direction:column;gap:10px;padding:16px 20px;background:var(--surface-soft);border-radius:8px}
+.stats-block .t{font-size:15px;font-weight:600;color:var(--ink);font-family:var(--font-cn)}
+.stats-block .r{font-size:13px;color:var(--charcoal);font-family:var(--font-en);white-space:pre-wrap}
+/* 测量趋势页（7-AnalysisView.swift）— 图表区沿用统计卡片体系，折线/柱状用内联 SVG */
+.trend-card-title{font-size:18px;font-weight:600;color:var(--ink-deep);font-family:var(--font-cn)}
+.trend-chart-row{display:flex;gap:8px;align-items:stretch}
+.trend-ycol{flex:none;width:40px;height:240px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end}
+.trend-axis-label{font-size:12px;color:var(--stone);font-family:var(--font-en);line-height:1}
+.trend-scroll{flex:1;min-width:0}
+.trend-plot{position:relative;cursor:pointer}
+.trend-plot svg{display:block;width:100%;height:auto}
+/* x 轴标签行：与卡片内其他间距统一为 16（设计稿：图表底缘→x标签 16、x标签→提示 16） */
+.trend-xrow{position:relative;height:14px;margin-top:16px}
+.trend-xrow .trend-axis-label{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+.trend-hint{font-size:13px;color:var(--stone);font-family:var(--font-cn)}
+.trend-loading{display:flex;flex-direction:column;align-items:center;gap:16px;padding:140px 0}
+.trend-loading .pct{font-family:var(--font-en);font-size:18px;font-weight:600;color:var(--ink)}
+.trend-loading .msg{font-size:14px;color:var(--charcoal);font-family:var(--font-cn)}
+.trend-loading .tip{font-size:15px;color:var(--primary);font-family:var(--font-cn)}
+.toast{position:fixed;left:50%;bottom:40px;transform:translateX(-50%) translateY(20px);background:var(--ink-deep);color:#FFFFFF;font-size:14px;padding:10px 22px;border-radius:var(--radius-pill);opacity:0;pointer-events:none;transition:all .25s ease;z-index:99}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body data-page-node-id="Gt2FAFal8VU5lmX4VhUgJB">
+
+<!-- ================= 页面 1：登录 ================= -->
+<div class="page active" id="page-login" data-page-node-id="hrIW7JVO05QFP5aqmwYEy1">
+  <div class="top-nav" data-page-node-id="itAdxQQOMIDJzoDUtihGMf">
+    <div class="logo" data-page-node-id="tgzPUnQ2tHSW4obk4iX0Ud">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" data-page-node-id="3F9IxDdy4AH0CeKNDeZ7qq"><path d="M12 2.5L20.5 7.25V16.75L12 21.5L3.5 16.75V7.25L12 2.5Z" stroke="#0064E0" stroke-width="2" data-page-node-id="oJqecwu46hhIlhNhMQ2lHk"/><path d="M12 8L16.5 10.5V15.5L12 18L7.5 15.5V10.5L12 8Z" fill="#0064E0" data-page-node-id="DuJ43VlYG3PEiffLx3OGrs"/></svg>
+      <span class="logo-text" data-page-node-id="FPnLTvCB6q1xSvjjsUrXe3">nuralogix</span>
+    </div>
+    <div class="lang-switch" data-page-node-id="YJqJ0c2kYydT4NfBEUkE10">
+      <button class="lang-pill" id="lang-btn" aria-haspopup="listbox" aria-expanded="false"></button>
+      <div class="lang-menu" id="lang-menu" role="listbox"></div>
+    </div>
+  </div>
+  <div class="login-body" data-page-node-id="BmwtYrXqHxDru2YUt30VAQ">
+    <div class="login-card" data-page-node-id="HrZFJcDHe7OhDymIcOc6i0">
+      <div class="login-title" data-page-node-id="mmNIbfUAnMJPAkARdEa3pM" data-i18n="login_title">请登录</div>
+      <form class="login-form" id="login-form" data-page-node-id="HWW0BdycejzbvcUkIqx7So">
+        <!-- 单账号：组织名称 / 电子邮箱 / 密码 -->
+        <div id="single-area" style="display:flex;flex-direction:column;gap:20px" data-page-node-id="Zi5F41wAlPsuVjsmBjdqXt">
+          <div class="field" data-page-node-id="1TglpcKFNCjeFIAJz7FnOz">
+            <label class="field-label" data-page-node-id="q3H8EajjsiPDw35764rKAo" data-i18n="org_label">组织名称</label>
+            <input class="text-input" id="login-org" placeholder="org" autocomplete="off" data-page-node-id="P5W9j4hiV7FJV0gGPoAG79">
+          </div>
+          <div class="field" data-page-node-id="BbJw4H2NKzDIGDqCU3HcUp">
+            <label class="field-label" data-page-node-id="4tOh31QXWTjfYAI6MkwJlU" data-i18n="email_label">电子邮箱</label>
+            <input class="text-input" id="login-email" placeholder="example@gmail.com" autocomplete="off" data-page-node-id="E1y6gZP9odJf3bYycGNaLy">
+          </div>
+          <div class="field" data-page-node-id="Dqvh9fN6UIdd1OCAHWUQYc">
+            <label class="field-label" data-page-node-id="oUQy5qPUp9iuqLQcfT4ozl" data-i18n="password_label">密码</label>
+            <div class="input-with-icon" data-page-node-id="khGw0xcKSxbbwemcFLj3uz">
+              <input class="text-input" id="login-pwd" type="password" placeholder="123456" data-page-node-id="REBA9FmiAycKuuThJ2tNnW">
+              <span class="eye-btn" id="toggle-pwd" data-page-node-id="lvSIq1hmGIp6QcvlZME6w6">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" data-page-node-id="tj1PhDSsC3D47ktUmZ0jiO"><path d="M2.5 12C4.5 7.5 8 5.5 12 5.5C16 5.5 19.5 7.5 21.5 12C19.5 16.5 16 18.5 12 18.5C8 18.5 4.5 16.5 2.5 12Z" stroke="#8595A4" stroke-width="1.6" data-page-node-id="5D2vlARGUSvicYZyB6B5dC"/><circle cx="12" cy="12" r="3" stroke="#8595A4" stroke-width="1.6" data-page-node-id="Ix5HXvKP1szhgpKu1zf7yA"/><path d="M4.5 19.5L19.5 4.5" stroke="#8595A4" stroke-width="1.6" data-page-node-id="wW8K0X63E0s5fzoobPewSG"/></svg>
+              </span>
+            </div>
+          </div>
+          <div class="region-tabs" id="region-tabs" data-page-node-id="0Q6taA7jA4Z6j9O5JsDRxy">
+            <button type="button" class="tab active" data-region="0" data-page-node-id="kemEMC6Qvbem1v610AUtgA" data-i18n="region_china">国内</button>
+            <button type="button" class="tab" data-region="1" data-page-node-id="kf9up2QaZQG6MZPlaJiHcc" data-i18n="region_international">海外</button>
+          </div>
+        </div>
+        <!-- 多账号：按格式批量输入 -->
+        <div id="multi-area" style="display:none;flex-direction:column;gap:12px" data-page-node-id="JxAzhRHZfFPAfXCv5nMWLE">
+          <div class="multi-tip" data-page-node-id="CBqkh8gVzPdJntAnGr63Xo" data-i18n="login_multi_input_tip">请按标准格式输入账号相关信息：</div>
+          <textarea class="multi-textarea" id="multi-text" spellcheck="false" data-i18n-placeholder="login_multi_example"
+            placeholder="格式如下，多账号请换行区分：&#10;组织名称 账号 密码 已充值金额 单价 计费日期 域名(0:国内,1:海外)&#10;&#10;如：&#10;org1 example1@gmail.com 123456 5000 0.8 2020.01.01 0&#10;org2 example2@gmail.com 123456 2000 1.0 2022.01.01 0&#10;org3 example3@gmail.com 123456 1000 1.2 2025.05.04 1"></textarea>
+        </div>
+        <div class="mode-row" data-page-node-id="7SeJ53PyKpDRmmWEHNiN7T">
+          <button type="button" class="multi-link" id="mode-toggle" data-page-node-id="DeK9AWyQJqVDoetjWFgwFm">多账号登录</button>
+        </div>
+        <button type="submit" class="btn-login" id="login-btn" data-page-node-id="gGA8UmRpHguCnKlfAqHKaZ">
+          <span id="login-btn-text" data-page-node-id="Oic34AZYYUNw7uVGHCuCxr">登录</span>
+          <span class="spinner" id="login-spinner" data-page-node-id="nuAR5Z4iBMTVNc2jglLbwr"></span>
+        </button>
+        <div class="login-note" id="login-note" data-page-node-id="aISMvAC4fa0eGVpjb0L5Y6">· 请使用NuraLogix提供的管理员账号登录 ·</div>
+      </form>
+    </div>
+  </div>
+  <div class="login-footer" data-page-node-id="gCz2aYMr4pZ9N91X5M4Egx">
+    <div class="logo" data-page-node-id="dmzgoG1b5e3oJ342paVzNz">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" data-page-node-id="K5dDgYSTTfsGpMZB2rJJTs"><path d="M12 2.5L20.5 7.25V16.75L12 21.5L3.5 16.75V7.25L12 2.5Z" stroke="#0064E0" stroke-width="2" data-page-node-id="yaFSVxhCmLYGY854QPCKCp"/><path d="M12 8L16.5 10.5V15.5L12 18L7.5 15.5V10.5L12 8Z" fill="#0064E0" data-page-node-id="d2wPqjw6nRBejRVxzOQW7N"/></svg>
+      <span class="logo-text" data-page-node-id="1jygg5SaVMpxKiMl6PqrSm">nuralogix</span>
+    </div>
+    <span class="version" data-page-node-id="sVHPqFkHGXg4hc9nF9kNZr">v2.0</span>
+  </div>
+</div>
+
+<!-- ================= 页面 2：组织账单列表 ================= -->
+<div class="page" id="page-list" data-page-node-id="5XBjfRpmYDV1mVaHbZjK2Z">
+  <div class="app-nav" data-page-node-id="ZDeDxlKsf8HfRCXQB4ZRI5">
+    <div class="logo" data-page-node-id="ZCg6g1AdYkvCHAMlVDY6bd">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" data-page-node-id="XM2diCDHIdAeaoaLRnom1O"><path d="M12 2.5L20.5 7.25V16.75L12 21.5L3.5 16.75V7.25L12 2.5Z" stroke="#0064E0" stroke-width="2" data-page-node-id="RCK0fskdppTtPiTSbdszz1"/><path d="M12 8L16.5 10.5V15.5L12 18L7.5 15.5V10.5L12 8Z" fill="#0064E0" data-page-node-id="rIut3SwAXFWLPZV5Dfj8Fn"/></svg>
+      <span class="logo-text" data-page-node-id="BsExctQt53fLLwvJ79goPi">nuralogix</span>
+    </div>
+    <div class="nav-right" data-page-node-id="gaksoHpuzZ34oWwDP1ukW1">
+      <span class="update-time" id="update-time" data-page-node-id="pDFKK7nPqfWD0TIJgx9HPv">上次更新时间: —</span>
+      <button class="icon-btn-circle" id="settings-btn" data-page-node-id="rTm9zN9k2tJXlkF1ikr1bA" title="设置" data-i18n-title="settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+      <div class="settings-menu" id="settings-menu" data-page-node-id="IOi3nBE0qKy9B6rwOYJQdT">
+        <div class="settings-item" id="settings-account-info" data-page-node-id="27:114">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4.5 20.5c0-3.9 3.4-6.5 7.5-6.5s7.5 2.6 7.5 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span data-i18n="account_info">账号信息</span>
+        </div>
+        <div class="settings-item" id="settings-logout" data-page-node-id="pi9wA6SpJymWtuYjx7Nhkt">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span data-i18n="logout">退出登录</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="app-content" data-page-node-id="KYgpySqBHQspBuZ4Nnn2LC">
+    <div class="page-head" data-page-node-id="NC7i2ViN5ilhbLtM0gvMWr">
+      <div class="page-title" data-page-node-id="yEoJDIPBsaaqMKAAlYG0ch" data-i18n="org_list_title">组织列表</div>
+      <div class="head-actions" data-page-node-id="DJBuwx1Z34B1EwZPJk7k4Y">
+        <button class="btn-outline" id="stat-btn" data-page-node-id="X5e9DdOhFTMwVv9xurCeh9" data-i18n="statistics_billing_title">统计分析</button>
+        <button class="btn-primary-pill" id="refresh-btn" data-page-node-id="lrPxcPK3XpaYF5xH3DRUVv"><span id="refresh-btn-text" data-page-node-id="N5suvajvTQpDNS3luvBm14">刷新</span></button>
+      </div>
+    </div>
+
+    <div class="filter-row" data-page-node-id="GDtIEKvkXR1WPeIk1D2gDx">
+      <div id="cycle-row" style="display:flex;align-items:center;gap:12px" data-page-node-id="SHARYhDjvX8ryPH3SYhmha">
+        <span class="filter-label" data-page-node-id="fFFS37nNlXOCBND3MRRgZv" data-i18n="period_select">周期选择:</span>
+        <button class="dropdown-pill" id="cycle-pill" data-page-node-id="5gnXAprtrlxZbdUNyidm2C">
+          <span id="cycle-pill-text" data-page-node-id="Q1z16sCfHi7GjUC6WuJpCv">无</span>
+          <svg id="cycle-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" data-page-node-id="3PQWWKPsWvLNVQd0x8rWsS"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="#444950" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="9AL9Cly0jshhaiisd54DwU"/></svg>
+        </button>
+      </div>
+      <!-- 自定义周期（开始时间 ~ 截止时间） -->
+      <div class="custom-range" id="custom-range" data-page-node-id="nxjqVhGCSVPqbsyTLiuVGY">
+        <div class="range-group" data-page-node-id="pgTOTEuzAvu6r2sCXufP1a">
+          <span class="range-label" data-page-node-id="ErCJqGFZSQyWsHsg1FSa4e">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" data-page-node-id="1AvVvTNf8J9dcf83LlzMMM"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="#444950" stroke-width="1.3" data-page-node-id="VNtPxirwkwEvFg3Q4bGegc"/><path d="M1.5 5.5H12.5" stroke="#444950" stroke-width="1.3" data-page-node-id="fGLzeeb5OY9hse4Taesb1v"/></svg>
+            <span data-i18n="start_time">开始时间</span>
+          </span>
+          <input type="date" class="range-input" id="start-date-input" data-page-node-id="Ulxwme2Ba4lGuOwu36IvQ1">
+          <button class="btn-mini" id="reset-start" data-page-node-id="X25DtmDg2p8kJEGdYs99O4" data-i18n="reset">重置</button>
+          <button class="btn-mini primary" id="confirm-start" data-page-node-id="bRM423jlUE2kuYmMakFJRv" data-i18n="confirm">确定</button>
+        </div>
+        <span class="range-sep" data-page-node-id="cOzP2870qH6Gfe3qAyxaxW">~</span>
+        <div class="range-group" data-page-node-id="uCPf2ghOtaUnQYt2JbmHUj">
+          <span class="range-label" data-page-node-id="HT56uSymHI9xqifMCx5DBp">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" data-page-node-id="ttUreRFGrFMjAuiZWoUSJ7"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="#444950" stroke-width="1.3" data-page-node-id="YqahA7JhadhWCww5tgHZzZ"/><path d="M1.5 5.5H12.5" stroke="#444950" stroke-width="1.3" data-page-node-id="RqiGnye2fmEGu83L8U7Z2v"/></svg>
+            <span data-i18n="end_time">截止时间</span>
+          </span>
+          <input type="date" class="range-input" id="end-date-input" data-page-node-id="zldkwaFKXmbnUDihBTaTJD">
+          <button class="btn-mini" id="reset-end" data-page-node-id="Ar1oRRSTqPqJFoO3YNonje" data-i18n="reset">重置</button>
+          <button class="btn-mini primary" id="confirm-end" data-page-node-id="RBLFm2xZRors3NCyRNtFbI" data-i18n="confirm">确定</button>
+        </div>
+        <button class="btn-back-range" id="back-to-list-from-range" title="返回" data-i18n-title="back" data-page-node-id="XpBEns45u7DMjBqifpKpk1">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" data-page-node-id="y5vUu6HTnDQo7EEabO219n"><path d="M10 3L5 8L10 13" stroke="#0064E0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="VuoxvyoMfQ65d9bCBUh1wh"/></svg>
+        </button>
+      </div>
+      <div class="cycle-menu" id="cycle-menu" data-page-node-id="IOi3nBE0qKy9B6rwOYJQdT"></div>
+    </div>
+
+    <!-- 刷新进度（iOS: 线性进度 + 百分比） -->
+    <div class="progress-wrap" id="progress-wrap" data-page-node-id="Be9XCw8cTYcK9zc8KpEvuP">
+      <div class="progress-track" data-page-node-id="idkVciAKkXBfcMhpOpXxbu"><div class="progress-bar" id="progress-bar" data-page-node-id="oAewlq9WEnom7YpTWpNd5M"></div></div>
+      <span class="progress-text" id="progress-text" data-page-node-id="uOUeNkwQW68o2yC1dlXM2R">0%</span>
+    </div>
+
+    <div class="table-card" data-page-node-id="7vIV10gHGFcvudwqD7rrYd">
+      <div class="table-head" data-page-node-id="fqNqZDfrIIGMhSdDsVRZ2O">
+        <span class="th w170" data-page-node-id="cjDoMgcSCFSfcDZGOARslE" data-i18n="org_name_label">组织名称</span><span class="th w70" data-page-node-id="1cH7nopJcmTRHDDQTM99FR" data-i18n="region_label">地区</span><span class="th w90" data-page-node-id="Gzs4KJ8zFJkZfD4q43uEkk" data-i18n="study_count_label">研究(个)</span>
+        <span class="th w130" data-page-node-id="11kFCFHhVHBT0KwyLHdzxW" data-i18n="success_count_label">账单内测量(次)</span><span class="th w100" data-page-node-id="DTnkZCTiO2stj2oqCxR5on" data-i18n="total_deposits_label">总充值(元)</span><span class="th w110" data-page-node-id="9tg1EUBYmH4DmZZKQHAadA" data-i18n="unit_price_label">单价(元/次)</span>
+        <span class="th w120" data-page-node-id="Bfz8lncu3WaZtoo7kihIxF" data-i18n="billing_cost_label">账单费用(元)</span><span class="th w100" data-page-node-id="oKNxTB2ZjfglijLtQRnYvW" data-i18n="balance_label">余额(元)</span><span class="th w150" data-page-node-id="XuTen80IoH65BaOMUy0eo3" data-i18n="period_success_label">周期内成功测量(次)</span>
+        <span class="th w140" data-page-node-id="DT3sDl7NcQXKCwpJL9WxPg" data-i18n="period_cost_label">周期内消费(元)</span><span class="th w130" data-page-node-id="s06qIDV7uwd6mEEtG1k4n7" data-i18n="billing_date">账单开始日期</span>
+      </div>
+      <div id="org-rows" data-page-node-id="jOIedN6zk93GBbPu23cUwa"></div>
+    </div>
+    <div class="table-foot" data-page-node-id="w2EtrRI2sDa2geoOHWBVTk">
+      <span class="count" id="org-count" data-page-node-id="p1MBxIbreJI5SduaXvqGdL"></span>
+      <span class="count" id="billing-name" data-page-node-id="4USllplK9hq7MqqWQGv6U1"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 页面 3：组织账单详情 ================= -->
+<div class="page" id="page-detail" data-page-node-id="9hI5NIc7n2oKBATFOeZ61A">
+  <div class="app-nav" data-page-node-id="BxR0xA7ff95pbfSMswwmFh">
+    <div class="logo" data-page-node-id="PnaXLJfanBBTihJScXwbsz">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" data-page-node-id="BJ7AHJorT15krJdIkoimGF"><path d="M12 2.5L20.5 7.25V16.75L12 21.5L3.5 16.75V7.25L12 2.5Z" stroke="#0064E0" stroke-width="2" data-page-node-id="gkmD79EdAZhFJKuRLU86Fx"/><path d="M12 8L16.5 10.5V15.5L12 18L7.5 15.5V10.5L12 8Z" fill="#0064E0" data-page-node-id="IDdS2qMGL4VpIUsQSr06UF"/></svg>
+      <span class="logo-text" data-page-node-id="uC9UIYdae40hDijtgat2a0">nuralogix</span>
+    </div>
+    <div class="crumb" id="d-crumb" data-page-node-id="LVzVEb6Xdv9on8UjvVaurN">组织名称 / support</div>
+  </div>
+  <div class="detail-content" data-page-node-id="FqgXEJoqjH4wOgMRJjuWue">
+    <div class="detail-head" data-page-node-id="0ujOPhl40PaDEiYN3iXCNY">
+      <button class="back-btn" id="back-btn" data-page-node-id="Ir8v9A0ygOPgaCdk2vu9H1">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" data-page-node-id="jYkDqDxSyL4NtATSKzMzRE"><path d="M10 3L5 8L10 13" stroke="#0A1317" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="4R1EuyP3BHqr0QI7GVXLZS"/></svg>
+      </button>
+      <span class="org-title" id="d-title" data-page-node-id="neIXzIxuaAUZGyhQZIYMLC">support</span>
+      <span class="region-badge" id="d-region-badge" data-page-node-id="IsaD6wxYAhwmHMrRaa6LWc">地区: 国内</span>
+      <span class="refreshing" id="d-refreshing" data-page-node-id="aHi2vifMhhD7h94X0jEUXW"></span>
+    </div>
+
+    <div class="summary" data-page-node-id="FC9mCWyLKSnK7nKH7xwQC9">
+      <div class="metric-row" data-page-node-id="lwZEhlyeLyRkQrBVrrukAl">
+        <div class="metric-card" data-page-node-id="3vAX5P92GqSkEoax1xgVF9">
+          <span class="metric-label" data-page-node-id="NZUcheYY0MmSrJpqyhmagm" data-i18n="total_deposits_label">总充值(元)</span>
+          <span class="metric-value" data-page-node-id="Z1O8Wdh4EuZy1qXAQJFFBl"><span id="d-deposits" data-page-node-id="B9vs2IbDs6AlMbYkz8CKlo">0</span>
+            <span class="icon-btn" id="d-deposits-edit" title="编辑充值金额" data-i18n-title="edit_deposits" data-page-node-id="uebMZtJTqzK4CcvHjuv6aL">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" data-page-node-id="5wffrvy2iKDKPDAyKsH1cU"><path d="M9.5 1.8L12.2 4.5L4.7 12H2V9.3L9.5 1.8Z" stroke="#0064E0" stroke-width="1.3" stroke-linejoin="round" data-page-node-id="FCMGGoCH19nuCANeCHhBpt"/></svg>
+            </span>
+          </span>
+        </div>
+        <div class="metric-card" data-page-node-id="OOBs9khgGEcQEN7vJwekVm">
+          <span class="metric-label" data-page-node-id="Ud9CfJWjzcJ9f6oHUtbxJr" data-i18n="unit_price_label">单价(元/次)</span>
+          <span class="metric-value" data-page-node-id="9BhS3PnrSDnBowJqBLqxot"><span id="d-unitprice" data-page-node-id="20kOMrxOuGp7pelfdAFXum">1.0</span>
+            <span class="icon-btn" id="d-unitprice-edit" title="编辑单价" data-i18n-title="input_unit_price_title" data-page-node-id="hVFmdCPCChRbOz1bk2QWhu">
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" data-page-node-id="0Subl9I2eIuNAzwpCdLk1H"><path d="M9.5 1.8L12.2 4.5L4.7 12H2V9.3L9.5 1.8Z" stroke="#0064E0" stroke-width="1.3" stroke-linejoin="round" data-page-node-id="LjtZA8nl7WhXCzTKiOPsbG"/></svg>
+            </span>
+          </span>
+        </div>
+        <div class="metric-card" data-page-node-id="ihVoP4tJxVm09osvwEwqNd">
+          <span class="metric-label" data-page-node-id="pjhqrFF3PsF8GHRVoJ1ZuF" data-i18n="billing_cost_label">账单费用(元)</span>
+          <span class="metric-value" data-page-node-id="fXaxV65R3H8siFVU9PZmoK"><span id="d-billcost" data-page-node-id="Vjm1Sx1nuaPS5TqIWmbhhH">0</span></span>
+        </div>
+        <div class="metric-card" data-page-node-id="WGqrqbGwjWdNVieX12PGa4">
+          <span class="metric-label" data-page-node-id="fCEjny4ZKy0k9vCpJCNGiz" data-i18n="balance_label">余额(元)</span>
+          <span class="metric-value" data-page-node-id="goE9u6rwRHx4vmOc77tzuD"><span id="d-balance" data-page-node-id="ltAvmtqtY01nCwqJ8ZbxjA">0</span></span>
+        </div>
+      </div>
+      <div class="metric-row" data-page-node-id="R4yL3qFAecbQHGvbt3dGRq">
+        <div class="metric-card" data-page-node-id="AJAgjfSGi2Lpz31BYlUtiB">
+          <span class="metric-label" data-page-node-id="Q03TqVQxs76rtxXt9xgrYW" data-i18n="billing_date">账单开始日期</span>
+          <span class="metric-value" data-page-node-id="FT7KgclK9rY0BddVTDEcZ0"><span id="d-billingdate" data-page-node-id="6V0nisclLW5rPbaNtWJuSx">2020.01.01</span>
+            <span class="icon-btn" id="d-billingdate-edit" title="账单开始日期" data-i18n-title="billing_date" data-page-node-id="1DhyYEL99XQAIBzrZPSicE">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" data-page-node-id="8FXOOq5BRB3XEDyryxuu2h"><rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="#0064E0" stroke-width="1.3" data-page-node-id="sXBRPtj9scCsc3MwzGEakm"/><path d="M1.5 5.5H12.5" stroke="#0064E0" stroke-width="1.3" data-page-node-id="kEZnAlmG5vyhHgdhdR08Wl"/><path d="M4.5 1V4" stroke="#0064E0" stroke-width="1.3" stroke-linecap="round" data-page-node-id="VtUFLVguGKpjjczTB6UgnB"/><path d="M9.5 1V4" stroke="#0064E0" stroke-width="1.3" stroke-linecap="round" data-page-node-id="s9pP3HKmHD0corhPVhSyIO"/></svg>
+            </span>
+          </span>
+        </div>
+        <div class="metric-card" data-page-node-id="7Ze48868sX4duefyzckWcn">
+          <span class="metric-label" data-page-node-id="K6j0QOolFHDKvGKG41jB8H" data-i18n="region_label">地区</span>
+          <span class="metric-value cn" data-page-node-id="e8QNXrOHwmtDrQkMp4A9ym"><span id="d-region" data-page-node-id="aHv2JInrrlACDALRUDlNuY">国内</span></span>
+        </div>
+        <div class="metric-card" data-page-node-id="q2d6DPRbtu7iZAPTIpHzvU">
+          <span class="metric-label" data-page-node-id="S51TM8rPYndbBVLBnrCbel" data-i18n="period_time">统计周期</span>
+          <span class="metric-value blue" data-page-node-id="sBofdcdCpVoJxutAMGxoqN"><span id="d-period" data-page-node-id="y692bsRgDalQcifcN1hnYK">统计周期: -</span></span>
+        </div>
+        <div class="metric-card" data-page-node-id="kFa9coVn1CzekDqX1QFgSx">
+          <span class="metric-label" data-page-node-id="Dp8lCqU6cwofZ0CqflKLTS" data-i18n="period_cost_label">周期内消费(元)</span>
+          <span class="metric-value blue" data-page-node-id="8qeGZFcTbWKTeuT6AsCkwA"><span id="d-periodcost" data-page-node-id="NUP4IvyDBWYOI4RcKYBR2k">-</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title" data-page-node-id="X2KWdSDHSRaJclHeaaC020"><span data-i18n="study_table_title">研究表</span><span class="refreshing" id="study-refreshing" data-page-node-id="aHi2vifMhhD7h94X0jEUXW"></span></div>
+    <div class="table-card" style="padding-bottom:0" data-page-node-id="UT65qXacpMirbub4v5iaKn">
+      <div class="table-head" data-page-node-id="CmZiQk2wFg3cJ63jbI7zHv">
+        <span class="th rw110" id="th-created" data-page-node-id="qGhjvDniQWfTFvtKJrk5qj">创建日期</span>
+        <span class="th rw190" id="th-name" data-page-node-id="4SpGNGV2kkSgyslZgmbjWh">研究名称</span>
+        <span class="th rw70" id="th-status" data-page-node-id="FU91dLaT0iHTyK3HYPWLtO">状态</span>
+        <span class="th rw130" id="th-unitprice" data-page-node-id="HSH3BeRJglTFX4bRtfpE5z">单价(元/次)</span>
+        <span class="th rw140" id="th-period-success" data-page-node-id="j66QGHBVmbQt83LXn4MNOI">周期内测量(次)</span>
+        <span class="th rw140" id="th-period-cost" data-page-node-id="1IVW8m9R3YqhZYrFKq0iZU">周期费用(元)</span>
+        <span class="th rw140" id="th-billing-success" data-page-node-id="13HcC6aPvSmiU6B1S1RqHG">账单内测量(次)</span>
+        <span class="th rw130" id="th-billing-cost" data-page-node-id="U99c36AtFZqpXG3dm71PdH">账单费用(元)</span>
+        <span class="th rw150" id="th-study-id" data-page-node-id="0wMiO7vRxT5WJGDtBq7GAG">研究ID</span>
+      </div>
+      <div id="research-rows" data-page-node-id="bRpz6MLydMMh5sJPAQpeFt"></div>
+      <div class="total-row" data-page-node-id="7kHBR1qKrwz391TiSInUuS">
+        <span class="td cn-label rw110" id="d-total-label" data-page-node-id="eGfFeuZgjbN4gGOL8ftiuh">合计 (0)</span>
+        <span class="td dash rw190" data-page-node-id="1ginrtEMWkWZenX0hwCiLZ">—</span>
+        <span class="td dash rw70" data-page-node-id="GNSdVtO0HI7AXvSXQUDkam">—</span>
+        <span class="td dash rw130" data-page-node-id="pLTGtALugjdpxwOUmznTlr">—</span>
+        <span class="td rw140" id="d-total-period-success" data-page-node-id="AJ48s4diIIvNLLefdOArTO">-</span>
+        <span class="td rw140" id="d-total-period-cost" data-page-node-id="QwtAvVlcS5uuykYg7Otcex">-</span>
+        <span class="td rw140" id="d-total-billing-success" data-page-node-id="2EvRbCHgqnoT2vuOTWJoYa">0</span>
+        <span class="td rw130" id="d-total-billing-cost" data-page-node-id="wvABJlDF5ftwG6ITW3sf7d">0</span>
+        <span class="td dash rw150" data-page-node-id="3RLyqEWkdi9W6coaR1rJLj">—</span>
+      </div>
+    </div>
+    <div class="detail-hint" data-page-node-id="8CkmIibo7vf8TyTT7IGT1x" data-i18n="detail_edit_hint">单价与账单开始日期支持在线修改，点击字段旁的图标即可编辑</div>
+  </div>
+</div>
+
+<div class="page" id="page-statistics">
+  <div class="app-nav">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L20.5 7.25V16.75L12 21.5L3.5 16.75V7.25L12 2.5Z" stroke="#0064E0" stroke-width="2"/><path d="M12 8L16.5 10.5V15.5L12 18L7.5 15.5V10.5L12 8Z" fill="#0064E0"/></svg>
+      <span class="logo-text">nuralogix</span>
+    </div>
+    <div class="crumb" id="stats-crumb">组织账单 / 统计分析</div>
+  </div>
+  <div class="detail-content">
+    <div class="stats-toolbar">
+      <button class="back-btn" id="stats-back" title="返回列表" data-i18n-title="back_to_list">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8L10 13" stroke="#0A1317" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="page-title" id="stats-title">统计分析</span>
+      <div class="stats-seg" id="stats-seg" style="display:none">
+        <button type="button" id="stats-tab-custom">自定义周期</button>
+        <button type="button" id="stats-tab-bill">账单</button>
+      </div>
+    </div>
+
+    <div class="stats-period-bar" id="stats-period-bar" style="display:none"></div>
+
+    <div class="stats-card">
+      <div class="stats-card-head">
+        <div class="stats-total-bar" id="stats-total-bar">共计 (0)</div>
+        <button class="stats-chart-btn" id="stats-chart-summary" title="图表分析" data-i18n-title="chart_analysis">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18" stroke="#0064E0" stroke-width="2" stroke-linecap="round"/><path d="M7 15l4-5 3 3 5-7" stroke="#0064E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="stats-blocks">
+        <div class="stats-block"><span class="t" id="stats-f-title">30s测量</span><span class="r" id="stats-f-count">· 测量次数:  0</span><span class="r" id="stats-f-cost">· 测量费用:  0</span></div>
+        <div class="stats-block"><span class="t" id="stats-s-title">5s测量</span><span class="r" id="stats-s-count">· 测量次数:  0</span><span class="r" id="stats-s-cost">· 测量费用:  0</span></div>
+        <div class="stats-block"><span class="t" id="stats-t-title">全部测量</span><span class="r" id="stats-t-count">· 测量次数:  0</span><span class="r" id="stats-t-cost">· 测量费用:  0</span></div>
+      </div>
+    </div>
+
+    <div id="stats-org-list" style="display:flex;flex-direction:column;gap:24px"></div>
+  </div>
+</div>
+
+<!-- ================= 页面 5：测量趋势（7-AnalysisView.swift） ================= -->
+<div class="page" id="page-trend">
+  <div class="app-nav">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L20.5 7.25V16.75L12 21.5L3.5 16.75V7.25L12 2.5Z" stroke="#0064E0" stroke-width="2"/><path d="M12 8L16.5 10.5V15.5L12 18L7.5 15.5V10.5L12 8Z" fill="#0064E0"/></svg>
+      <span class="logo-text">nuralogix</span>
+    </div>
+    <div class="crumb" id="trend-crumb">统计分析 / 全部</div>
+  </div>
+  <div class="detail-content">
+    <div class="stats-toolbar">
+      <button class="back-btn" id="trend-back" title="返回统计分析" data-i18n-title="back_to_statistics">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8L10 13" stroke="#0A1317" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="page-title" id="trend-title">全部</span>
+    </div>
+
+    <div class="trend-loading" id="trend-loading" style="display:none">
+      <span class="pct" id="trend-pct">0%</span>
+      <span class="msg" id="trend-loading-text">正在加载数据…</span>
+      <span class="tip" id="trend-loading-tip">首次加载数据可能会比较久，请耐心等待！</span>
+    </div>
+
+    <div id="trend-content" style="display:none;flex-direction:column;gap:24px">
+      <div class="stats-card">
+        <span class="trend-card-title" id="trend-day-title">30日测量趋势</span>
+        <div class="trend-chart-row">
+          <div class="trend-ycol" id="trend-day-ylabels"></div>
+          <div class="trend-scroll" id="trend-day-scroll">
+            <div class="trend-plot" id="trend-day-plot"></div>
+          </div>
+        </div>
+        <div class="trend-hint" id="trend-day-hint"></div>
+      </div>
+      <div class="stats-card">
+        <span class="trend-card-title" id="trend-month-title">12个月测量趋势</span>
+        <div class="trend-chart-row">
+          <div class="trend-ycol" id="trend-month-ylabels"></div>
+          <div class="trend-plot" id="trend-month-plot" style="flex:1;min-width:0"></div>
+        </div>
+        <div class="trend-hint" id="trend-month-hint"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-root" data-page-node-id="mI2aFgksbgMvw4FTl0WEG5"></div>
+<div class="toast" id="toast" data-page-node-id="pISiFYCdhvgsFMrS36o7eW"></div>
+
+<script src="./model.js"></script>
+<script src="./api.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "billingweb",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NuraLogix 计费系统 Web 版（接口与日期/数值语义与 iOS AnuraHelper 逐字对齐）",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run.js",
+    "test:live": "node tests/run.js --live"
+  }
+}
