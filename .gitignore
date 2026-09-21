@@ -1,9 +1,6 @@
 # 依赖
 node_modules/
 
-# Vercel CLI 生成的本地项目链接信息（含 projectId / orgId，不入库）
-.vercel
-
 # 环境变量（切勿提交）
 .env
 .env.local

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * BillingWeb 本地服务：静态页面 + 接口中继
+ * BillingWeb 服务：静态页面 + 接口中继（本地与线上跑的是同一份）
  *
  *   node server.js                       # 默认绑 0.0.0.0:4173（本机 + 局域网都能访问）
  *   node server.js 8080                  # 指定端口
  *   BW_HOST=127.0.0.1 node server.js     # 只允许本机访问（关掉局域网暴露）
  *   BW_HOST=192.168.3.244 node server.js # 只绑指定网卡
  *
- * 局域网部署要点：
+ * 局域网部署要点（可选模式：把服务开放给同网段的同事；线上不这样做，见文末）：
  *   · 必须绑 0.0.0.0（或具体网卡 IP）。绑 127.0.0.1 时局域网内其它机器一律连不上。
  *   · **前端无需任何改动**：局域网 IP 页面上 `_isLocalPage()` 为 false，前端把自己
  *     当成「部署页」→ 走同源相对路径 `/__proxy`，而它正好由本进程提供，链路自洽。
@@ -16,7 +16,7 @@
  *     而局域网客户端的 127.0.0.1 指向它自己 → 中继立刻全灭。
  *   · HTTP 明文，本服务不做 TLS。而前端会把组织/账号/口令存进 localStorage 并在
  *     每次登录发出 → **只在可信内网部署，别放到能被人抓包的公共网络**。
- *   · 中继白名单见 api/_lib/proxy.js（仅 `*.deepaffex.cn` / `*.deepaffex.ai`），
+ *   · 中继白名单见 lib/proxy.js（仅 `*.deepaffex.cn` / `*.deepaffex.ai`），
  *     其它域名一律 403，不能拿它当开放代理。
  *   · 本进程**没有任何访问口令**：能连到这个端口的人就能打开整个计费系统。
  *
@@ -26,16 +26,28 @@
  *   请求的 URL、Query 参数、Method、Authorization 头、JSON Body 全部原样透传，
  *   因此接口行为与 iOS 端保持一致。
  *
- * 中继实现与线上（Vercel api/proxy.js）**共用** api/_lib/proxy.js，行为不许漂移。
+ * 中继实现全部在 lib/proxy.js，只此一处真值，不存在第二份需要同步的实现。
  * 页面只要开着（本机任意端口、VS Code Live Preview 都行），中继优先；
  * 跨端口访问中继是允许的（见 app/api.js 的 _isLocalPage）。
+ *
+ * 线上部署（腾讯云轻量应用服务器 —— 当前唯一目标平台）：
+ *   · 用 systemd 托管本进程，并且**绑 127.0.0.1 而不是 0.0.0.0**
+ *     （Environment=BW_HOST=127.0.0.1），不把 4173 直接暴露到公网；
+ *   · Caddy 站在前面终止 TLS：`:443 { reverse_proxy 127.0.0.1:4173 }`。
+ *     ⚠️ **必须是 https**：本服务自身是 HTTP 明文，而前端会把组织/账号/口令发出来。
+ *     公网上任何一跳都能拦截并改写我们发出去的 app.js（插一段窃取代码再放行），
+ *     所以「在 Caddy 前面加访问口令」挡不住这件事 —— 只有 TLS 能。
+ *   · 选**境内**节点的关键理由：只有境内出口能连上接口的国内区
+ *     （api.prod.deepaffex.cn 在 AWS 中国区 cn-north-1），
+ *     同时也能连上东京的 api.as-east.deepaffex.ai —— 一个节点服务两种账号。
+ *     境外节点连不上国内区，只能服务海外账号。
  */
 const http = require("http");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { URL } = require("url");
-const { handleProxy, RELAY_HEADERS } = require("./api/_lib/proxy");
+const { handleProxy, RELAY_HEADERS } = require("./lib/proxy");
 
 const PORT = Number(process.argv[2] || 4173);
 /** 默认绑所有网卡，局域网才能访问；BW_HOST=127.0.0.1 可收回本机专属 */
@@ -67,9 +79,10 @@ const MIME = {
 /**
  * 兼容两种地址形态，避免「换个环境地址就 404」：
  *   · 本服务的静态根 = `app/`        → 页面地址是 `/` 或 `/index.html`
- *   · VS Code Live Preview 与线上部署（Vercel、EdgeOne）静态根 = 仓库根
+ *     （线上 Caddy 也是反代到本进程，所以线上地址同样不带 `/app` 前缀）
+ *   · VS Code Live Preview 静态根 = 仓库根
  *                                    → 页面地址是 `/app/index.html`
- * 把 `/app` 前缀映射回根，同一个链接在三种环境下都能打开。
+ * 把 `/app` 前缀映射回根，同一个链接在两种环境下都能打开。
  *
  * ⚠️ 别名必须覆盖整个 `/app/*` 而不只是 index.html：页面内用的是相对路径
  * （`./model.js` / `./api.js` / `./app.js`），浏览器会解析成 `/app/xxx.js`。

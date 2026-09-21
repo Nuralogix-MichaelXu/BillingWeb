@@ -10,13 +10,13 @@
  *  · getMeasurements 解码失败自动重试（最多 100 次，与 iOS 一致）
  *  · updateStudies 每个组织内最多 10 个并发（与 iOS TaskGroup 一致）
  *
- *  传输层：页面走「同源 /__proxy 中继优先」——本机由 node server.js 提供，
- *  线上（Vercel 等）由 api/proxy.js 经 /__proxy → /api/proxy 的 rewrite 提供。
+ *  传输层：页面走「同源 /__proxy 中继优先」——本机与线上都由 node server.js 提供
+ *  （线上是 Caddy 反代到 127.0.0.1:4173），中继实现见 lib/proxy.js。
  *  中继只做传输层转发 —— 请求 URL、参数、Header、Body 完全不变，因此接口行为与
  *  iOS 端一致；而浏览器直连每个业务请求还要额外付一次 CORS 预检（被拦时再回退重发），
  *  服务端看到的请求量是 iOS 的 2~3 倍，海外接口会因此触发 429 限流，
  *  故统一改用「同源单跳」对齐 iOS 的请求量。
- *  中继不可达（server.js 没在跑 / rewrite 没生效）会被记住 5 秒，期间不再逐请求去撞，
+ *  中继不可达（server.js 没在跑 / 反代没生效）会被记住 5 秒，期间不再逐请求去撞，
  *  报错文案也会按「本机 / 线上」分别点明处置办法。
  * ==========================================================================*/
 
@@ -35,7 +35,7 @@ function _isSessionExpiredCode(code) {
  * 浏览器里能否直连取决于接口的 CORS 策略（实测：接口会回显请求的 Origin，
  * 所以 http(s) 页面可以直连；但 file:// 打开时 Origin 为 "null"，接口拒绝，
  * Safari 会报 "Load failed"）。
- * 本地中继 server.js / 线上 api/proxy.js 的 /__proxy 只做传输层转发，
+ * 中继（server.js 的 /__proxy，实现见 lib/proxy.js）只做传输层转发，
  * URL / Query / Header / Body 原样透传。
  *
  * 为什么「中继优先」而不是「直连优先」：
@@ -104,7 +104,7 @@ function _isLocalPage() {
 }
 /**
  * 页面是否部署在线上环境（http(s) 且不是本机）。
- * 线上（Vercel / 任意反向代理）会把 /__proxy 转发到 api/proxy.js：
+ * 线上（Caddy 等反向代理）会把 /__proxy 转给 server.js：
  * 中继与页面同源 → 用相对路径即可，既不发跨域预检，也不会有混合内容问题。
  */
 function _isDeployedPage() {
@@ -124,7 +124,7 @@ function _servedByRelay() {
 }
 /** 中继请求该用同源相对路径，还是绝对地址 */
 function _useRelativeRelay() {
-  // 线上：/__proxy 与页面同源（vercel.json 的 rewrite / 反向代理），必须用相对路径
+  // 线上：/__proxy 与页面同源（反向代理），必须用相对路径
   if (_isDeployedPage()) return true;
   // 本机：只有页面正好由中继提供时才用相对路径；Live Preview 等其它端口要用绝对地址指到 4173
   return _servedByRelay();
@@ -174,7 +174,7 @@ function _relayKnownDown() {
 function _noteRelayDown(reason) {
   if (!_relayHealth.everFailed) {
     const advice = _isDeployedPage()
-      ? `请检查部署是否包含 api/proxy.js，以及 vercel.json 里 /__proxy → /api/proxy 的 rewrite 是否生效。`
+      ? `请检查服务器上 server.js 是否在运行，以及反向代理（Caddy）是否把 /__proxy 转发到 127.0.0.1:4173。`
       : `请运行 node server.js 后刷新页面。`;
     console.warn(
       `[BillingWeb] 接口中继不可达（${_relayLabel()}${reason ? "：" + reason : ""}），` +
@@ -221,12 +221,12 @@ function transportCandidates(absURL) {
 
 /**
  * 中继自身的故障（不是上游接口的响应）。判据靠中继响应头 `X-Billing-Relay`
- * （由 api/_lib/proxy.js 写入，见 RELAY_HEADERS）：
+ * （由 lib/proxy.js 写入，见 RELAY_HEADERS）：
  *   · 有标记 = 响应确实来自我们的中继 → 上游什么状态码都是正常透传
  *     （上游自己的 404/500 页面也是 HTML，绝不能误判成「中继不存在」），
  *     只有中继自己写出来的 502 PROXY_ERROR 才算「这次转发失败」；
- *   · 无标记 = 这个地址上根本不是我们的中继 —— 平台错误页（Vercel 404/504）、
- *     静态托管的 HTML 兜底页、4173 被别的服务占了、rewrite 没生效 ——
+ *   · 无标记 = 这个地址上根本不是我们的中继 —— 平台错误页、静态托管的
+ *     HTML 兜底页、4173 被别的服务占了、反代规则没生效 ——
  *     一律按传输层失败处理，换通道重试。
  * 注意「中继地址根本没在跑」不会走到这里 —— 那是 fetch 直接抛错，走 `_noteRelayDown`。
  */
@@ -361,7 +361,7 @@ function _noteCrossOriginDirect(absURL) {
   _applyRate();
   _throttle.tokens = Math.min(_throttle.tokens, 1); // 清掉积压令牌，立刻生效，不再第一波突发
   const advice = _isDeployedPage()
-    ? "请确认部署里 /__proxy → api/proxy.js 的 rewrite 生效（同源中继没有预检开销）。"
+    ? "请确认服务器上 server.js 在运行、反向代理已把 /__proxy 转给它（同源中继没有预检开销）。"
     : "运行 node server.js 走本地中继可恢复全速。";
   console.warn(
     `[BillingWeb] 接口 ${_hostOf(absURL) || ""}为跨域直连（每个业务请求额外带一次 OPTIONS 预检，` +
@@ -419,7 +419,7 @@ function _transportError(lastErr, rounds = 1) {
     hint = `当前页面以 file:// 直接打开，接口不接受该来源（Origin: null）。请先运行 node server.js，再通过 ${RelayConfig.base}/ 访问页面。`;
   } else if (_isDeployedPage()) {
     hint = _relayHealth.everFailed
-      ? `本站接口中转 ${_relayLabel()} 不可用。请确认部署包含 api/proxy.js，且 /__proxy → /api/proxy 的 rewrite 已生效（可在浏览器直接打开 ${_relayLabel()}?url=https%3A%2F%2Fapi.prod.deepaffex.cn 自查）。`
+      ? `本站接口中转 ${_relayLabel()} 不可用。请确认服务器上 server.js 在运行，且反向代理已把 /__proxy 转发到 127.0.0.1:4173（可在浏览器直接打开 ${_relayLabel()}?url=https%3A%2F%2Fapi.prod.deepaffex.cn 自查）。`
       : `接口域名不可达。请确认部署环境能访问接口域名（海外 api.as-east.deepaffex.ai / 国内 api.prod.deepaffex.cn），并确认中继本身可用（浏览器打开 ${_relayLabel()}?url=https%3A%2F%2Fapi.prod.deepaffex.cn 自查）。`;
   } else if (_relayHealth.everFailed) {
     // 中继尝试过且不可用 = 页面不是中继提供的 / server.js 没在跑。

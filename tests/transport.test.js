@@ -8,7 +8,7 @@
  * 契约：
  *   · 本机页面（node server.js 的 127.0.0.1 / localhost，含 Live Preview 的 :3000）→
  *     中继优先（绝对地址 http://127.0.0.1:4173/__proxy）
- *   · 线上页面（Vercel 等部署域名）→ 中继优先（同源相对路径 /__proxy，靠 rewrite 打到 api/proxy.js）
+ *   · 线上页面（部署域名）→ 中继优先（同源相对路径 /__proxy，由反向代理转给 server.js）
  *   · file:// → 中继优先（绝对地址，且永远保留中继：直连必失败）
  *   · 线上没配 /__proxy（404 / HTML 兜底页）→ 当成中继不可用，降级直连并记住 5s
  *   · 中继响应带 X-Billing-Relay 标记头：有标记 = 上游状态码原样透传（含上游自己的 HTML 404），
@@ -19,7 +19,7 @@
  *   · 429：不触发重新登录、不进入 100 次重试风暴；幂等 GET 做 4 次退避重试
  *   · 401 / token 过期：**不自动续期**，直接按会话失效抛出（零登录请求）
  *   · 全失败时的文案：中继试过且不可用 → 直说「未检测到本地中继服务」+ node server.js
- *   · 跨域直连（中继不可用 / rewrite 失效时被迫走的路）：接口没有 Access-Control-Max-Age，
+ *   · 跨域直连（中继不可用 / 反代失效时被迫走的路）：接口没有 Access-Control-Max-Age，
  *     预检结果不缓存 → 一个业务请求 = 服务端 2 次命中（预检 + 业务）。对**有限流层的主机**
  *     （海外，实测 x-ratelimit-limit: 5,5;w=1）把速率上限压到 2 req/s，否则 24 次/秒
  *     打 5 次/秒 的接口，预检 429 会让浏览器把业务请求判死成 net::ERR_FAILED（单次即致命）；
@@ -88,7 +88,7 @@ const tooMany = { status: 429, text: async () => "" };
 const authOk = (token) => ({ status: 200, text: async () => JSON.stringify({ Token: token }) });
 
 /**
- * 真实的中继响应都带 `X-Billing-Relay` 标记头（api/_lib/proxy.js 的 RELAY_HEADERS）。
+ * 真实的中继响应都带 `X-Billing-Relay` 标记头（lib/proxy.js 的 RELAY_HEADERS）。
  * 桩必须带上它，否则会被判成「这个地址不是我们的中继」→ 误触发换通道 + 记不可用。
  */
 const relayHeaders = { get: (k) => (String(k).toLowerCase() === "x-billing-relay" ? "1" : null) };
@@ -234,7 +234,7 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
     check("B2 提示中点明 file:// 来源问题", msg.includes("file://"), true);
   }
 
-  /* ===== C. 线上部署页面（Vercel）→ 同源相对 /__proxy 中继优先 ===== */
+  /* ===== C. 线上部署页面 → 同源相对 /__proxy 中继优先 ===== */
   {
     const s = makeSandbox("https:", REMOTE, async () => apiErrResponse);
     await s.get(`APIClient.login("a","b","c",Region.china)`).catch(() => {});
@@ -242,7 +242,7 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
     check("C1 只发 1 次请求（同源不发预检、不回退）", s.calls.length, 1);
   }
   {
-    // rewrite 没配 → /__proxy 404 → 本请求回退直连，并记住 5s
+    // 反代没配 → /__proxy 404 → 本请求回退直连，并记住 5s
     const s = makeSandbox("https:", REMOTE, async (u, o, n) =>
       n === 1 ? { status: 404, text: async () => "not found" } : apiErrResponse
     );
@@ -287,7 +287,7 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
       (e) => e.message
     );
     check("C5 线上文案点明中转地址", msg.includes("https://preview.example.com/__proxy"), true);
-    check("C5 给出部署自查办法", msg.includes("api/proxy.js"), true);
+    check("C5 给出部署自查办法", msg.includes("server.js") && msg.includes("反向代理"), true);
     check("C5 不让线上用户去运行 node server.js", msg.includes("node server.js"), false);
   }
 
@@ -442,7 +442,7 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
     check("H5 同源中继不受影响（仍 12 req/s）", s.get("_throttle.rate"), 12);
   }
   {
-    // 线上 rewrite 没生效 → 回落跨域直连 → 海外主机同样压速
+    // 线上反代没生效 → 回落跨域直连 → 海外主机同样压速
     const s = makeSandbox("https:", REMOTE, async (u, o, n) =>
       n === 1 ? { status: 404, text: async () => "not found" } : apiErrResponse
     );
