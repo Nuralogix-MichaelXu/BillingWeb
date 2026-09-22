@@ -8,7 +8,7 @@
  * 契约：
  *   · 本机页面（node server.js 的 127.0.0.1 / localhost，含 Live Preview 的 :3000）→
  *     中继优先（绝对地址 http://127.0.0.1:4173/__proxy）
- *   · 线上页面（部署域名）→ 中继优先（同源相对路径 /__proxy，由反向代理转给 server.js）
+ *   · 线上页面（Vercel 等部署域名）→ 中继优先（同源相对路径 /__proxy，靠 rewrite 打到 api/proxy.js）
  *   · file:// → 中继优先（绝对地址，且永远保留中继：直连必失败）
  *   · 线上没配 /__proxy（404 / HTML 兜底页）→ 当成中继不可用，降级直连并记住 5s
  *   · 中继响应带 X-Billing-Relay 标记头：有标记 = 上游状态码原样透传（含上游自己的 HTML 404），
@@ -19,7 +19,7 @@
  *   · 429：不触发重新登录、不进入 100 次重试风暴；幂等 GET 做 4 次退避重试
  *   · 401 / token 过期：**不自动续期**，直接按会话失效抛出（零登录请求）
  *   · 全失败时的文案：中继试过且不可用 → 直说「未检测到本地中继服务」+ node server.js
- *   · 跨域直连（中继不可用 / 反代失效时被迫走的路）：接口没有 Access-Control-Max-Age，
+ *   · 跨域直连（中继不可用 / rewrite 失效时被迫走的路）：接口没有 Access-Control-Max-Age，
  *     预检结果不缓存 → 一个业务请求 = 服务端 2 次命中（预检 + 业务）。对**有限流层的主机**
  *     （海外，实测 x-ratelimit-limit: 5,5;w=1）把速率上限压到 2 req/s，否则 24 次/秒
  *     打 5 次/秒 的接口，预检 429 会让浏览器把业务请求判死成 net::ERR_FAILED（单次即致命）；
@@ -45,12 +45,13 @@ const AUTH_RELAY_ABS = "http://127.0.0.1:4173" + AUTH_RELAY;
 const LOCAL = "http://127.0.0.1:4173";
 const REMOTE = "https://preview.example.com";
 
-function makeSandbox(protocol, origin, handler) {
+function makeSandbox(protocol, origin, handler, opts) {
   const calls = [];
   const store = {};
   const ctx = {
     location: { protocol, origin },
-    console,
+    // 允许用例接管 console：既能断言「成因被真的打出来了」，又能避免污染套件输出
+    console: (opts && opts.console) || console,
     setTimeout,
     clearTimeout,
     AbortSignal,
@@ -234,7 +235,7 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
     check("B2 提示中点明 file:// 来源问题", msg.includes("file://"), true);
   }
 
-  /* ===== C. 线上部署页面 → 同源相对 /__proxy 中继优先 ===== */
+  /* ===== C. 线上部署页面（Vercel）→ 同源相对 /__proxy 中继优先 ===== */
   {
     const s = makeSandbox("https:", REMOTE, async () => apiErrResponse);
     await s.get(`APIClient.login("a","b","c",Region.china)`).catch(() => {});
@@ -242,7 +243,7 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
     check("C1 只发 1 次请求（同源不发预检、不回退）", s.calls.length, 1);
   }
   {
-    // 反代没配 → /__proxy 404 → 本请求回退直连，并记住 5s
+    // rewrite 没配 → /__proxy 404 → 本请求回退直连，并记住 5s
     const s = makeSandbox("https:", REMOTE, async (u, o, n) =>
       n === 1 ? { status: 404, text: async () => "not found" } : apiErrResponse
     );
@@ -287,8 +288,147 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
       (e) => e.message
     );
     check("C5 线上文案点明中转地址", msg.includes("https://preview.example.com/__proxy"), true);
-    check("C5 给出部署自查办法", msg.includes("server.js") && msg.includes("反向代理"), true);
+    check("C5 给出部署自查办法", msg.includes("api/proxy.js"), true);
     check("C5 不让线上用户去运行 node server.js", msg.includes("node server.js"), false);
+  }
+
+  /* ---------- C6. 中继自述的 502 成因必须被带出来 ----------
+   * 现场（2026-09-21，测量页刷数据）：控制台里全是「降级直连」造成的 CORS 报错，
+   * 而真正的原因（中继出口连不上上游）一个字都没有 —— 因为中继写在 502 正文里的成因被丢了，
+   * 且「直连失败」还会在最后一步把那份成因覆盖掉。看起来像跨域问题，其实是出口网络问题。
+   * 这一组钉住：成因要进用户可见文案 + 进控制台，且不得把线上用户赶去跑 node server.js。 */
+  {
+    const warns = [];
+    const proxyBody = JSON.stringify({
+      Code: "PROXY_ERROR",
+      Message: "",
+      ErrName: "AggregateError",
+      ErrCode: "ETIMEDOUT",
+      ElapsedMs: 16327,
+      Upstream: "api.prod.deepaffex.cn",
+      Method: "GET",
+      Path: "/organizations/measurements",
+      BodySource: "none",
+      ConnectErrCount: 3,
+      ConnectErrors: "54.223.162.2:ETIMEDOUT, 52.80.97.78:ETIMEDOUT",
+      Region: "sfo1",
+    });
+    const s = makeSandbox(
+      "https:",
+      REMOTE,
+      async (u) => {
+        if (u.includes("/__proxy")) return relayRes(502, proxyBody);
+        // 降级直连必然被 CORS 拦掉（接口不发 Access-Control-Allow-Origin）——现场就是这样。
+        // 它同时暴露另一个坑：这里抛错会把中继那份成因覆盖掉，所以成因必须单独留一份。
+        throw new TypeError("Failed to fetch");
+      },
+      { console: { warn: (m) => warns.push(String(m)), log() {}, error() {} } }
+    );
+    s.get(`_throttle.cooldownScale = 0.01`);
+    const msg = await s.get(`APIClient.login("a","b","c",Region.china)`).then(
+      () => "",
+      (e) => e.message
+    );
+    check("C6 文案点明是「中继转发上游」失败", msg.includes("转发上游"), true);
+    check("C6 带上错误码", msg.includes("ETIMEDOUT"), true);
+    check("C6 带上上游主机", msg.includes("api.prod.deepaffex.cn"), true);
+    check("C6 带上逐地址结果（分辨坏 IP 与整条出口不通）", msg.includes("逐个地址"), true);
+    check("C6 明确与本机网络/VPN 无关", msg.includes("VPN"), true);
+    check("C6 不把线上用户赶去跑 node server.js", msg.includes("node server.js"), false);
+    check(
+      "C6 控制台也打出了成因",
+      warns.some((w) => w.includes("ETIMEDOUT") && w.includes("api.prod.deepaffex.cn")),
+      true
+    );
+    check("C6 控制台绝不包含请求头或口令字样", warns.some((w) => /password|authorization/i.test(w)), false);
+  }
+  {
+    // 没有我们的标记 ⇒ 那个地址上不是我们的中继 ⇒ 它的正文不能当「中继自述」用
+    const s = makeSandbox(
+      "https:",
+      REMOTE,
+      async () => ({
+        status: 502,
+        headers: { get: () => null },
+        text: async () => JSON.stringify({ Code: "PROXY_ERROR", ErrCode: "ETIMEDOUT" }),
+      }),
+      { console: { warn() {}, log() {}, error() {} } }
+    );
+    s.get(`_throttle.cooldownScale = 0.01`);
+    const msg = await s.get(`APIClient.login("a","b","c",Region.china)`).then(
+      () => "",
+      (e) => e.message
+    );
+    check("C7 无标记时不说「中继本身是通的」", msg.includes("中继本身是通的"), false);
+  }
+  {
+    // 正文不是 PROXY_ERROR（HTML 兜底页）⇒ 不得误当成「中继自述成因」，行为保持原样
+    const warns = [];
+    const s = makeSandbox(
+      "https:",
+      REMOTE,
+      async (u, o, n) =>
+        n === 1 ? relayRes(502, "<html>gateway</html>") : { status: 200, text: async () => "{}" },
+      { console: { warn: (m) => warns.push(String(m)), log() {}, error() {} } }
+    );
+    s.get(`_throttle.cooldownScale = 0.01`);
+    const msg = await s.get(`APIClient.login("a","b","c",Region.china)`).then(
+      () => "",
+      (e) => e.message
+    );
+    check("C8 HTML 兜底页不被当成「中继自述成因」", msg.includes("转发上游"), false);
+    check("C8 也不会打出成因日志", warns.some((w) => w.includes("转发上游失败")), false);
+  }
+  {
+    /* ---------- C9. 建议必须跟着「中继试了几次」走 ----------
+     * 中继现在自己在转发链路上重试，所以同一个失败有两种含义完全不同的情况：
+     *   Attempts=1 → 还没试过重试，属偶发 ⇒ 让用户「稍后重试」是对的；
+     *   Attempts=3 → 重试已经用尽仍失败 ⇒ 再说「偶发、稍后重试」就是把用户耗在
+     *               一个不会自愈的问题上，此时唯一有意义的动作是换节点。
+     * 同一句建议不可能对两种情况都成立，所以逐条断言。 */
+    const run = async (extra) => {
+      const body = JSON.stringify(
+        Object.assign(
+          {
+            Code: "PROXY_ERROR",
+            ErrName: "AggregateError",
+            ErrCode: "ETIMEDOUT",
+            Upstream: "api.prod.deepaffex.cn",
+            BodySource: "none",
+            ConnectErrors: "54.223.162.2:ETIMEDOUT",
+          },
+          extra
+        )
+      );
+      const s = makeSandbox(
+        "https:",
+        REMOTE,
+        async (u) => {
+          if (u.includes("/__proxy")) return relayRes(502, body);
+          throw new TypeError("Failed to fetch");
+        },
+        { console: { warn() {}, log() {}, error() {} } }
+      );
+      s.get(`_throttle.cooldownScale = 0.01`);
+      return s.get(`APIClient.login("a","b","c",Region.china)`).then(
+        () => "",
+        (e) => e.message
+      );
+    };
+
+    const exhausted = await run({ Attempts: 3, AttemptErrors: [{ Attempt: 1 }, { Attempt: 2 }, { Attempt: 3 }] });
+    check("C9a 重试用尽时说明「已重试至第 3 次」", exhausted.includes("已重试至第 3 次"), true);
+    check("C9a 明确「重试不会自愈」", exhausted.includes("重试不会自愈"), true);
+    check("C9a 不再劝用户「稍后重试即可」", exhausted.includes("稍后重试即可"), false);
+    check("C9a 仍指向境内节点", exhausted.includes("境内") && exhausted.includes("部署节点"), true);
+
+    const single = await run({ Attempts: 1, Retried: false });
+    check("C9b 只试过 1 次时按偶发处理", single.includes("稍后重试即可"), true);
+    check("C9b 不说「重试不会自愈」", single.includes("重试不会自愈"), false);
+
+    // 旧版中继不回 Attempts（灰度期新旧同时在线）⇒ 必须退化成「偶发」，且不得崩
+    const legacy = await run({});
+    check("C9c 没有 Attempts 字段时不崩、退化成偶发建议", legacy.includes("稍后重试即可"), true);
   }
 
   /* ---------- D. POST body / 头与原逻辑保持一致 ---------- */
@@ -442,7 +582,7 @@ const relayRes = (status, body) => ({ status, headers: relayHeaders, text: async
     check("H5 同源中继不受影响（仍 12 req/s）", s.get("_throttle.rate"), 12);
   }
   {
-    // 线上反代没生效 → 回落跨域直连 → 海外主机同样压速
+    // 线上 rewrite 没生效 → 回落跨域直连 → 海外主机同样压速
     const s = makeSandbox("https:", REMOTE, async (u, o, n) =>
       n === 1 ? { status: 404, text: async () => "not found" } : apiErrResponse
     );

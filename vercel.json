@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["sfo1"],
+  "rewrites": [{ "source": "/__proxy", "destination": "/api/proxy" }],
+  "redirects": [{ "source": "/", "destination": "/app/index.html", "permanent": false }],
+  "functions": {
+    "api/proxy.js": { "maxDuration": 30 },
+    "api/diag.js": { "maxDuration": 30 }
+  }
+}

@@ -10,13 +10,13 @@
  *  · getMeasurements 解码失败自动重试（最多 100 次，与 iOS 一致）
  *  · updateStudies 每个组织内最多 10 个并发（与 iOS TaskGroup 一致）
  *
- *  传输层：页面走「同源 /__proxy 中继优先」——本机与线上都由 node server.js 提供
- *  （线上是 Caddy 反代到 127.0.0.1:4173），中继实现见 lib/proxy.js。
+ *  传输层：页面走「同源 /__proxy 中继优先」——本机由 node server.js 提供，
+ *  线上（Vercel 等）由 api/proxy.js 经 /__proxy → /api/proxy 的 rewrite 提供。
  *  中继只做传输层转发 —— 请求 URL、参数、Header、Body 完全不变，因此接口行为与
  *  iOS 端一致；而浏览器直连每个业务请求还要额外付一次 CORS 预检（被拦时再回退重发），
  *  服务端看到的请求量是 iOS 的 2~3 倍，海外接口会因此触发 429 限流，
  *  故统一改用「同源单跳」对齐 iOS 的请求量。
- *  中继不可达（server.js 没在跑 / 反代没生效）会被记住 5 秒，期间不再逐请求去撞，
+ *  中继不可达（server.js 没在跑 / rewrite 没生效）会被记住 5 秒，期间不再逐请求去撞，
  *  报错文案也会按「本机 / 线上」分别点明处置办法。
  * ==========================================================================*/
 
@@ -35,7 +35,7 @@ function _isSessionExpiredCode(code) {
  * 浏览器里能否直连取决于接口的 CORS 策略（实测：接口会回显请求的 Origin，
  * 所以 http(s) 页面可以直连；但 file:// 打开时 Origin 为 "null"，接口拒绝，
  * Safari 会报 "Load failed"）。
- * 中继（server.js 的 /__proxy，实现见 lib/proxy.js）只做传输层转发，
+ * 本地中继 server.js / 线上 api/proxy.js 的 /__proxy 只做传输层转发，
  * URL / Query / Header / Body 原样透传。
  *
  * 为什么「中继优先」而不是「直连优先」：
@@ -104,7 +104,7 @@ function _isLocalPage() {
 }
 /**
  * 页面是否部署在线上环境（http(s) 且不是本机）。
- * 线上（Caddy 等反向代理）会把 /__proxy 转给 server.js：
+ * 线上（Vercel / 任意反向代理）会把 /__proxy 转发到 api/proxy.js：
  * 中继与页面同源 → 用相对路径即可，既不发跨域预检，也不会有混合内容问题。
  */
 function _isDeployedPage() {
@@ -124,7 +124,7 @@ function _servedByRelay() {
 }
 /** 中继请求该用同源相对路径，还是绝对地址 */
 function _useRelativeRelay() {
-  // 线上：/__proxy 与页面同源（反向代理），必须用相对路径
+  // 线上：/__proxy 与页面同源（vercel.json 的 rewrite / 反向代理），必须用相对路径
   if (_isDeployedPage()) return true;
   // 本机：只有页面正好由中继提供时才用相对路径；Live Preview 等其它端口要用绝对地址指到 4173
   return _servedByRelay();
@@ -174,7 +174,7 @@ function _relayKnownDown() {
 function _noteRelayDown(reason) {
   if (!_relayHealth.everFailed) {
     const advice = _isDeployedPage()
-      ? `请检查服务器上 server.js 是否在运行，以及反向代理（Caddy）是否把 /__proxy 转发到 127.0.0.1:4173。`
+      ? `请检查部署是否包含 api/proxy.js，以及 vercel.json 里 /__proxy → /api/proxy 的 rewrite 是否生效。`
       : `请运行 node server.js 后刷新页面。`;
     console.warn(
       `[BillingWeb] 接口中继不可达（${_relayLabel()}${reason ? "：" + reason : ""}），` +
@@ -225,8 +225,8 @@ function transportCandidates(absURL) {
  *   · 有标记 = 响应确实来自我们的中继 → 上游什么状态码都是正常透传
  *     （上游自己的 404/500 页面也是 HTML，绝不能误判成「中继不存在」），
  *     只有中继自己写出来的 502 PROXY_ERROR 才算「这次转发失败」；
- *   · 无标记 = 这个地址上根本不是我们的中继 —— 平台错误页、静态托管的
- *     HTML 兜底页、4173 被别的服务占了、反代规则没生效 ——
+ *   · 无标记 = 这个地址上根本不是我们的中继 —— 平台错误页（Vercel 404/504）、
+ *     静态托管的 HTML 兜底页、4173 被别的服务占了、rewrite 没生效 ——
  *     一律按传输层失败处理，换通道重试。
  * 注意「中继地址根本没在跑」不会走到这里 —— 那是 fetch 直接抛错，走 `_noteRelayDown`。
  */
@@ -255,6 +255,77 @@ function _isRelayFailure(status, text, marker) {
   if (status === 404) return true;
   if (_looksLikeHtmlFallback(text)) return true;
   return status >= 500;
+}
+
+/**
+ * 从中继自己写的 502 正文里抽出「为什么转发失败」。
+ *
+ * 正文由 `lib/proxy.js` 生成，形如
+ *   { Code:"PROXY_ERROR", Message, ErrName, ErrCode, Upstream, ElapsedMs,
+ *     BodySource, SentContentLength, ConnectErrCount, ConnectErrors, Region, ... }
+ * 它**只有中继写得出来**，且一次性把三类成因分开：正文那一跳（`BodySource`）、
+ * 出口网络（`ErrCode` / `ConnectErrors`）、实例区域（`Region`）。
+ *
+ * ⚠️ 为什么必须专门抽出来：这份正文原本被直接丢弃，浏览器控制台里只剩下孤零零一行
+ *    `502 (Bad Gateway)`，而它旁边却挤满了「降级直连」造成的 CORS 报错 —— 于是现场
+ *    看起来像「跨域问题」，真正的原因（中继出口连不上上游）一个字都看不到。
+ *    2026-09-21 实测就是这样耗掉了一轮排查。**最有用的一页数据不能扔。**
+ * ⚠️ 只取这些**结构化字段**，绝不打印请求头或请求正文（Authorization / 口令在那里）。
+ * 返回 null 表示「这不是中继自述的故障」→ 调用方保持原有文案。
+ */
+function _describeProxyError(text) {
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+  if (!json || typeof json !== "object" || json.Code !== "PROXY_ERROR") return null;
+  const parts = [];
+  const err = [json.ErrName, json.ErrCode].filter(Boolean).join("/");
+  if (err) parts.push(err);
+  if (json.Upstream) parts.push(`上游 ${json.Upstream}`);
+  if (json.ElapsedMs != null) parts.push(`${json.ElapsedMs}ms`);
+  // 逐个地址的结果：一眼分辨「一个坏 IP」与「整条出口不通」
+  if (json.ConnectErrors) parts.push(`逐个地址 ${json.ConnectErrors}`);
+  // 重试了几次。这条必须单独说清：只失败 1 次（不会再试）与「重试 3 次全失败」
+  // 指向完全不同的处置 —— 后者说明「再试一次」这条路走不通，只能换部署节点。
+  if (json.Attempts > 1) parts.push(`已重试至第 ${json.Attempts} 次仍失败`);
+  // 正文字段：区分「只有带正文的请求坏」与「出口整体不通」
+  if (json.BodySource) {
+    parts.push(`正文来源 ${json.BodySource}${json.SentContentLength != null ? `/${json.SentContentLength}B` : ""}`);
+  }
+  if (json.Region) parts.push(`实例 ${json.Region}`);
+  return {
+    errName: json.ErrName || null,
+    errCode: json.ErrCode || null,
+    upstream: json.Upstream || null,
+    elapsedMs: json.ElapsedMs != null ? json.ElapsedMs : null,
+    connectErrors: json.ConnectErrors || null,
+    attempts: json.Attempts > 0 ? json.Attempts : null,
+    bodySource: json.BodySource || null,
+    region: json.Region || null,
+    summary: parts.join(" · ") || (json.Message || "中继未给出细节"),
+  };
+}
+
+/** 仅供测试与降级使用：控制台不存在时（沙箱 / 老浏览器）不能因此抛错 */
+function _warn(msg) {
+  try {
+    if (typeof console !== "undefined" && console && typeof console.warn === "function") console.warn(msg);
+  } catch (e) {
+    /* 忽略：日志失败绝不能影响请求本身 */
+  }
+}
+
+/** 同一类成因只打前几次 —— 突发时同一原因会连着来几十条，刷屏反而看不见关键的那条 */
+const _relayProxySeen = new Map();
+function _noteRelayProxyError(status, diag) {
+  const key = `${status}|${diag.errCode || diag.errName || "?"}|${diag.bodySource || "?"}`;
+  const n = (_relayProxySeen.get(key) || 0) + 1;
+  _relayProxySeen.set(key, n);
+  if (n <= 3) _warn(`[中继] 转发上游失败 HTTP ${status} · ${diag.summary}`);
+  else if (n === 4) _warn(`[中继] 同一成因已重复 4 次，同类不再逐条打印（都是：${diag.summary}）`);
 }
 
 /* ------------------------------------------------------------ 限流自适应降速
@@ -361,7 +432,7 @@ function _noteCrossOriginDirect(absURL) {
   _applyRate();
   _throttle.tokens = Math.min(_throttle.tokens, 1); // 清掉积压令牌，立刻生效，不再第一波突发
   const advice = _isDeployedPage()
-    ? "请确认服务器上 server.js 在运行、反向代理已把 /__proxy 转给它（同源中继没有预检开销）。"
+    ? "请确认部署里 /__proxy → api/proxy.js 的 rewrite 生效（同源中继没有预检开销）。"
     : "运行 node server.js 走本地中继可恢复全速。";
   console.warn(
     `[BillingWeb] 接口 ${_hostOf(absURL) || ""}为跨域直连（每个业务请求额外带一次 OPTIONS 预检，` +
@@ -409,17 +480,41 @@ function _hasRateLimitLayer(absURL) {
 }
 
 /**
+ * 中继「转发上游失败」时该给什么建议 —— **取决于它自己试了几次**。
+ *
+ * 中继在转发那条链路上已经自建了多次重试（见 lib/proxy.js），所以：
+ *   · 试了 1 次就失败 → 这次不满足重试条件（多为「会发出去的空正文」那类）或刚起步，
+ *     按偶发处理，让用户稍后重试即可；
+ *   · 试了多次仍失败 → 重试这条路已经用尽，再让用户「稍后重试」就是把人耗在
+ *     一个不会自愈的问题上；这时唯一有意义的动作是换部署节点。
+ * 同一句建议不可能对两种情况都成立，所以必须分开写。
+ */
+function _relayRetryAdvice(attempts) {
+  const tried = Number(attempts) || 1;
+  if (tried > 1) {
+    return `中继已自行重试 ${tried} 次仍然失败 —— 这不是偶发，重试不会自愈，请改用境内的部署节点（可同时连通国内与海外接口）。`;
+  }
+  return "偶发时稍后重试即可；若持续如此则需要更换部署节点（境内节点可同时连通国内与海外接口）。";
+}
+
+/**
  * 传输层全失败时的提示，给出可执行的排查方向。
  * `rounds` = 两条通道一共尝试了几轮（首轮 + _TRANSPORT_RETRY_DELAYS 的重试）。
  */
-function _transportError(lastErr, rounds = 1) {
+function _transportError(lastErr, rounds = 1, relayDiag = null) {
   const detail = lastErr?.message || "网络错误";
+  const diag = relayDiag || lastErr?.relayDiagnosis || null;
   let hint;
   if (_isFileProtocol()) {
     hint = `当前页面以 file:// 直接打开，接口不接受该来源（Origin: null）。请先运行 node server.js，再通过 ${RelayConfig.base}/ 访问页面。`;
+  } else if (_isDeployedPage() && diag) {
+    // 中继**活着并如实回报了成因**（响应带本站标记）→ 故障在「中继 → 上游」那一跳。
+    // 这一条必须排在下面那条泛泛的「接口域名不可达」之前：否则用户会去查中继部署、
+    // 查 rewrite、查本地网络，而真正的原因（出口连不上上游）在正文里摆着。
+    hint = `中继本身是通的（响应带本站标记 X-Billing-Relay），失败发生在它**转发上游接口**那一跳：${diag.summary}。这与你本机网络、代理或 VPN 无关；${_relayRetryAdvice(diag.attempts)}`;
   } else if (_isDeployedPage()) {
     hint = _relayHealth.everFailed
-      ? `本站接口中转 ${_relayLabel()} 不可用。请确认服务器上 server.js 在运行，且反向代理已把 /__proxy 转发到 127.0.0.1:4173（可在浏览器直接打开 ${_relayLabel()}?url=https%3A%2F%2Fapi.prod.deepaffex.cn 自查）。`
+      ? `本站接口中转 ${_relayLabel()} 不可用。请确认部署包含 api/proxy.js，且 /__proxy → /api/proxy 的 rewrite 已生效（可在浏览器直接打开 ${_relayLabel()}?url=https%3A%2F%2Fapi.prod.deepaffex.cn 自查）。`
       : `接口域名不可达。请确认部署环境能访问接口域名（海外 api.as-east.deepaffex.ai / 国内 api.prod.deepaffex.cn），并确认中继本身可用（浏览器打开 ${_relayLabel()}?url=https%3A%2F%2Fapi.prod.deepaffex.cn 自查）。`;
   } else if (_relayHealth.everFailed) {
     // 中继尝试过且不可用 = 页面不是中继提供的 / server.js 没在跑。
@@ -491,6 +586,10 @@ const APIClient = {
     let response = null;
     let text = null;
     let lastErr = null;
+    // 中继自述的成因要单独留一份：它比「降级直连」的报错有信息量得多，而后者会在
+    // 外层 catch 里把 lastErr 覆盖掉（直连必然失败，因为接口不发 ACAO）——
+    // 若只挂在 lastErr 上，最有价值的那条信息恰好会在最后一步丢掉。
+    let relayDiag = null;
     let usedChannel = null;
     let rounds = 0;
     for (;;) {
@@ -508,7 +607,18 @@ const APIClient = {
               // 有标记（= 中继活着，只是这次转发上游失败）→ 不记，避免把上游抖动
               // 误升级成「放弃中继」（放弃后直连的请求量翻倍，反而更容易撞限流）。
               if (_relayDownWorthy(marker)) _noteRelayDown(`HTTP ${r.status}`);
-              lastErr = new Error(`中继不可用（HTTP ${r.status}）`);
+              // 中继自述了成因就照实带上：控制台只有一行 `502 (Bad Gateway)` 时，
+              // 真正的原因（出口连不上上游）会被旁边的 CORS 报错盖过去（见 _describeProxyError）。
+              // ⚠️ 只认**带标记**的响应：没有标记就说明这个地址上不是我们的中继，
+              //    别人凑巧回了同样的 JSON 也不能拿来当「中继自述」。
+              const diag = marker ? _describeProxyError(t) : null;
+              if (diag) {
+                _noteRelayProxyError(r.status, diag);
+                relayDiag = diag; // 单独留一份：见 relayDiag 声明处的说明
+                lastErr = new Error(`中继转发上游失败（HTTP ${r.status}：${diag.summary}）`);
+              } else {
+                lastErr = new Error(`中继不可用（HTTP ${r.status}）`);
+              }
               continue;
             }
             if (channel === "relay") _noteRelayUp();
@@ -538,7 +648,7 @@ const APIClient = {
       // 两条通道都失败 → 退避后再来一轮。
       // 跨域直连下最常见成因是「突发的 OPTIONS 预检撞上接口限流」：浏览器把业务请求
       // 判死成 net::ERR_FAILED，但等到冷却过后重试就能过（此时闸门已经降过速）。
-      if (rounds >= _TRANSPORT_RETRY_DELAYS.length) throw _transportError(lastErr, rounds + 1);
+      if (rounds >= _TRANSPORT_RETRY_DELAYS.length) throw _transportError(lastErr, rounds + 1, relayDiag);
       await new Promise((r) => setTimeout(r, _TRANSPORT_RETRY_DELAYS[rounds] * _throttle.cooldownScale));
       rounds += 1;
       await _respectCooldown();

@@ -26,21 +26,28 @@
  *   请求的 URL、Query 参数、Method、Authorization 头、JSON Body 全部原样透传，
  *   因此接口行为与 iOS 端保持一致。
  *
- * 中继实现全部在 lib/proxy.js，只此一处真值，不存在第二份需要同步的实现。
+ * 中继实现全部在 lib/proxy.js，只此一处真值：本进程与线上 Vercel 的 Serverless Function
+ * （api/proxy.js）**共用它**，不存在第二份需要同步的实现。
  * 页面只要开着（本机任意端口、VS Code Live Preview 都行），中继优先；
  * 跨端口访问中继是允许的（见 app/api.js 的 _isLocalPage）。
  *
- * 线上部署（腾讯云轻量应用服务器 —— 当前唯一目标平台）：
- *   · 用 systemd 托管本进程，并且**绑 127.0.0.1 而不是 0.0.0.0**
- *     （Environment=BW_HOST=127.0.0.1），不把 4173 直接暴露到公网；
- *   · Caddy 站在前面终止 TLS：`:443 { reverse_proxy 127.0.0.1:4173 }`。
- *     ⚠️ **必须是 https**：本服务自身是 HTTP 明文，而前端会把组织/账号/口令发出来。
- *     公网上任何一跳都能拦截并改写我们发出去的 app.js（插一段窃取代码再放行），
- *     所以「在 Caddy 前面加访问口令」挡不住这件事 —— 只有 TLS 能。
- *   · 选**境内**节点的关键理由：只有境内出口能连上接口的国内区
- *     （api.prod.deepaffex.cn 在 AWS 中国区 cn-north-1），
- *     同时也能连上东京的 api.as-east.deepaffex.ai —— 一个节点服务两种账号。
- *     境外节点连不上国内区，只能服务海外账号。
+ * 线上部署（本分支有两种形态，中继仍是同一份）：
+ *   · 形态一 —— 腾讯云轻量应用服务器：本进程直接跑在那里
+ *     · 用 systemd 托管本进程，并且**绑 127.0.0.1 而不是 0.0.0.0**
+ *       （Environment=BW_HOST=127.0.0.1），不把 4173 直接暴露到公网；
+ *     · Caddy 站在前面终止 TLS：`:443 { reverse_proxy 127.0.0.1:4173 }`。
+ *       ⚠️ **必须是 https**：本服务自身是 HTTP 明文，而前端会把组织/账号/口令发出来。
+ *       公网上任何一跳都能拦截并改写我们发出去的 app.js（插一段窃取代码再放行），
+ *       所以「在 Caddy 前面加访问口令」挡不住这件事 —— 只有 TLS 能。
+ *     · 选**境内**节点的关键理由：境内出口能连上接口的国内区
+ *       （api.prod.deepaffex.cn 在 AWS 中国区 cn-north-1），
+ *       同时也能连上东京的 api.as-east.deepaffex.ai —— 一个节点服务两种账号。
+ *   · 形态二 —— Vercel（本分支新增）：静态根是仓库根，`/__proxy` 由 Serverless
+ *     Function `api/proxy.js` 提供（vercel.json 的 rewrite），它 require 的正是
+ *     上面这一份 lib/proxy.js，因此两条形态行为一致。
+ *     ⚠️ 函数区域选 **sfo1**：接口的国内区在 AWS 中国区，**境外出口按区域而异** ——
+ *     hnd1（东京）实测连不上国内区（建连超时），表现为「国内账号登录失败、海外账号正常」。
+ *     区域选择与实测记录见 api/proxy.js 头部；部署后可用 /api/diag?form=1 现场复验。
  */
 const http = require("http");
 const fs = require("fs");
